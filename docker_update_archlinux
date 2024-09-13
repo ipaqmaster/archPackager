@@ -1,0 +1,32 @@
+#!/bin/bash
+
+_scriptPath=$(realpath $0)
+_scriptRoot="$(dirname $(realpath $0))"
+_scriptName="$(basename ${_scriptRoot})"
+
+
+baseImageName="archlinux:latest"
+
+if ! systemctl is-active docker >/dev/null 2>&1
+then
+  echo "Docker not running!"
+  exit 1
+elif ! docker ps >/dev/null 2>&1
+then
+  echo "Unable to access docker!"
+  exit 1
+fi
+
+
+# Pull the latest archlinux:docker image to be updated.
+# This will overwrite any local latest image
+docker pull "${baseImageName}"
+
+# Update a temporary container
+
+docker container rm "${_scriptName}" >/dev/null 2>&1
+docker run --name "${_scriptName}" "${baseImageName}" pacman -Syu --noconfirm
+
+# Commit this container as the new latest image.
+docker commit "${_scriptName}" "${baseImageName}"
+docker container rm "${_scriptName}" >/dev/null 2>&1
