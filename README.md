@@ -16,3 +16,17 @@ The script can automatically detect when a package has already been built from t
 This script intends to be called by its full path while in the working directory of an AUR (or official) package with a `./PKGBUILD` file present. The script uses the `archlinux:latest` docker image to get started, which can be updated by running `./docker_update_archlinux` at any time, which is intended to update the latest image to current packaged releases to avoid additional work per container. 
 
 It automatically notifies and exits when it believes an AUR package has been promoted to the official repositories, skipping this check if building official packages.
+
+### Arguments
+
+`-f`/`-force`/`--f`/`--force`
+
+Force a package to build even if a package file exists for it already
+
+`--key`
+
+Add and locally sign a key with `gpg` for trusting sources of a package
+
+`--pacmankey`
+
+Add and locally a key with `pacman-key` for trusting packages.
