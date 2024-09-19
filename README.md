@@ -30,3 +30,7 @@ Add and locally sign a key with `gpg` for trusting sources of a package
 `--pacmankey`
 
 Add and locally a key with `pacman-key` for trusting packages.
+
+---------
+
+Any additional/unrecognised arguments are passed to the makepkg process. There are a few flags reserved for script recursive use during dependency builds.
