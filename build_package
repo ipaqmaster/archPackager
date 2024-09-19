@@ -99,7 +99,7 @@ function getAllDeps {
   for dep in ${deps[*]}
   do
     dep="$(sed -E -e 's/(<|>)=.*//g' -e 's/=.*//g' -e 's/(<|>).*//g' <<< "${dep}")" # Strip version requirements from a package name.
-    echo "[${criptName} Processing dep ${dep}..."
+    echo "[${scriptName}] Processing dep ${dep}..."
     if ! checkPackageInRepos "${dep}"
     then
       echo "[${scriptName}] Acquiring AUR dependency ${dep}..."
