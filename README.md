@@ -71,3 +71,14 @@ This script can be invoked either manually at will or through a new Jenkins job.
 #### repo_prune
 
 The ./repo_prune script is used for culling older packages as time goes on to save on disk space. A new job can be created which just calls out to ./repo_prune and it will assume the top level directory `/repo` by default. Otherwise a repo top level directory can be given as an argument. This script serves to cull old package files as new ones come in.
+
+
+#### repo_sign
+
+This script is intended to be called after building a package so that a .sig can be generated with your designated package signing key.
+
+Create a Jenkins job (anywhere) to call this script and make sure you define a secure `gpg_passphrase` passphrase variable for the script to use for signing. Having this script separate ensures build tasks have no access to the signing process.
+
+By default it signs packages without a signature. With `--verify` it verifies and re-signs packages in the event of a forced build but ignores packages over 100MB in size. With both `--verify` and `--force` it will verify all packages including larger sized ones.
+
+Ideally you should never have to run `--verify` and/or `--force` however some packages such as python-based packages may need to be re-built as newer versions of python roll out for Archlinux. I am working on automatic python package detection so a epoch value can be set based on the python version - to avoid overwriting older pkg files in-place.
