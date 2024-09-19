@@ -54,6 +54,6 @@ Notice the repo has a `keys/pgp` directory which contains three keys.
 
 After cloning this repository to the home directory of the jenkins build server user invoke it with an Execute shell Build Step which contains: `$HOME/archPackager/build_package # incomplete`
 
-This would do for most packages but given this repository needs to trust three externally signed pgp public keys we must describe them to the scriptso it can trust them for the duration of the build: `$HOME/archPackager/build_package --key 647F28654894E3BD457199BE38DBBDC86092693E --key 83BC8889351B5DEBBB68416EB8AC08600F108CDF --key ABAF11C65A2970B130ABE3C479BE3E4300411886`
+This would do for most packages but given this repository needs to trust three externally signed pgp public keys we must describe them to the script so the build process can trust them when verifying key files of the build: `$HOME/archPackager/build_package --key 647F28654894E3BD457199BE38DBBDC86092693E --key 83BC8889351B5DEBBB68416EB8AC08600F108CDF --key ABAF11C65A2970B130ABE3C479BE3E4300411886`
 
 Making sure the directories `/repo/myOfficialPackageRepo/x86_64` exists the job should now be capable of building a package. Make sure the jenkins user has been added to the `docker` group and that the service is running.
