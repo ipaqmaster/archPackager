@@ -86,7 +86,6 @@ function getAurPackageInfo {
   fi
 
   echo "${packageBase}"
-  echo "Packagebase is: ${packageBase}" >&2
   [ -n "${packageBase}" ]
   return $?
 }
