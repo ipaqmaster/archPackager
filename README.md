@@ -2,9 +2,9 @@
 
 ### About 
 
-This is a script I use to build AUR (And occasionally, official) packages for Archlinux including any AUR dependencies along the way. It takes advantage of docker for cleanbuilding and will take advantage of existing AUR dependency builds to save resources. By default this script uses all available cores for makepkg (`$(nproc)`)
+This is a collection of scripts I use to build AUR (And occasionally, official) packages for Archlinux including any AUR dependencies along the way. The main script takes advantage of docker for cleanbuilding and existing AUR dependency builds to save on resources. By default it uses all available cores for makepkg (`$(nproc)`)
 
-It's designed to be used with Jenkins, which exposes some variables regarding a job's name and path for making some assumptions. The script attempts to determine the name of the package, its intended build architecture and repository name from the `JOB_NAME` variable when called by Jenkins or set manually. The script assumes that the repository name comes before the architecture.
+The main script is designed to be used with Jenkins which exposes some variables regarding a job's name and path for making some assumptions. It attempts to figure out the package name, its intended build architecture and repository name from the `JOB_NAME` variable when called by Jenkins (or set manually). It also assumes that the repository name comes right before the architecture.
 
 An example jenkins job path: `JOB_NAME=Jenkins/myJobs/Repos/myRepo/x86_64/utilities/someProgram` will set the architecture to `x86_64` and repository name to `myRepo`. Without an exposed `PKGDEST` variable the script will assume `/repo` as the base directory. (`/repo/myRepo/x86_64/someProgram.pkg.tar.zst`).
 
@@ -36,7 +36,7 @@ Add and locally a key with `pacman-key` for trusting packages.
 Any additional/unrecognised arguments are passed to the makepkg process. There are a few flags reserved for script recursive use during dependency builds.
 
 
-### Examples
+### Example usage of these scripts
 
 #### Linux, official Archlinux package
 
