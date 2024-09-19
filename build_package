@@ -257,6 +257,9 @@ function createContainer {
 scriptName=$(basename $0)
 declare -a makepkgArgs
 
+# Install any dependencies
+$SUDO pacman -S --needed jq
+
 arguments=($@) # For docker if invoked.
 while [ $# -gt 0 ]
 do
