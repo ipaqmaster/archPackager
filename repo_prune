@@ -1,0 +1,31 @@
+#!/bin/bash
+# Prune the contents of a repo keeping at most 2 previous versions of a package.
+# Should consider find /repo/repoName/ -type d -exec paccache -v -r -k 2 -c {} \;
+# for removals
+
+[ ${UID} -ne 0 ] && SUDO=sudo
+
+if [ -z "${1}" ]
+then
+  echo "Assuming default repo root: /repo"
+  repoRoot=/repo
+else
+  repoRoot="${1}"
+fi
+
+if ! [ -d "${repoRoot}" ]
+then
+  echo "Repo root ${repoRoot} does not exist. Exiting."
+  exit 1
+fi
+
+repoDbs=($(find "${repoRoot}" -name *.db.tar.gz))
+for repoDb in ${repoDbs[@]}
+do
+  echo '[Processing ${repoDb}]'
+  repoDir="$(dirname ${repoDb})"
+  repoDbfile=$(basename ${repoDb})
+  paccache --cachedir "${repoDir}" --remove --keep 2 -vvv
+  repo-add --new --prevent-downgrade ${repoDb} ${repoDir}/*.zst
+  ${SUDO} /usr/bin/fstrim -av
+done
