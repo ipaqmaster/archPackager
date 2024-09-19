@@ -1,0 +1,408 @@
+#!/bin/bash
+[ ${UID} -ne 0 ] && SUDO=sudo # Sudo if not root
+supportedArchs=(x86_64 armv7h aarch64 i686 pentium4 any)
+JOB_NAME_KEYS=(${JOB_NAME//// })
+
+#  _____                 _       
+# |  ___|   _ _ __   ___| |_ ___ 
+# | |_ | | | | '_ \ / __| __/ __|
+# |  _|| |_| | | | | (__| |_\__ \
+# |_|   \__,_|_| |_|\___|\__|___/
+#
+
+# Docker check
+
+function isDocker {
+  [ -f /.dockerenv ]
+  return $?
+}
+
+# Check if our package already exists in the intended destination directory.
+function checkPackageAlreadyBuilt {
+
+  if [ -f /etc/makepkg.conf ] && [ -f PKGBUILD ]
+  then
+    . /etc/makepkg.conf
+    . PKGBUILD
+
+    packageFilepath="${pkgname}-${epoch}${pkgver}-${pkgrel}-${arch}${PKGEXT}"
+    
+    if [ -n "${PKGDEST}" ]
+    then
+      packageFilepath="${PKGDEST}/${packageFilepath}"
+    fi
+
+    if [ -f "${packageFilepath}" ]
+    then
+      echo "Package already built: ${packageFilepath}"
+      return 0
+    else
+      return 1
+    fi
+  fi
+}
+
+# Check if the package we're about to build can already be seen in repos other
+# than the name of which we're about to build into.
+# (To catch AUR packages promoted to official repositories)
+function checkPackageInRepos {
+  pkgSearch="$( pacman -Ss "^${1}$" | grep '^[a-zA-Z]'  | grep -v "${REPONAME}")"
+
+  [ -n "${pkgSearch}" ]
+  return $?
+}
+
+# Check if the package we intend to build is already available in repos.
+function checkTargetPackageExists {
+  if grep -qs 'archlinux/packaging/packages' .git/config
+  then
+    echo "This appears to be an official package. Skipping obsoletion check."
+    return
+  fi
+
+  if checkPackageInRepos ${pkgname}
+  then
+    echo "This AUR package may be obsoleted!"
+    echo "Pacman findings:"
+    while read package
+    do
+      echo -e "\t${package}"
+    done <<< "${pkgSearch}"
+    exit 1
+  fi
+}
+
+# Try to get information about an AUR package
+function getAurPackageInfo {
+  depRepoQuery=$(curl -s -X 'GET' -H 'accept: application/json' "https://aur.archlinux.org/rpc/v5/info/${1}")
+  packageBase=$(jq -r .results[].PackageBase <<< "${depRepoQuery}")
+
+  # If we fail to resolve a package, desperately try again replacing hyphens with underscores.
+  if [ -z "${packageBase}" ]
+  then
+    echo "Re-searching package info with underscores..." >&2
+    depRepoQuery=$(curl -s -X 'GET' -H 'accept: application/json' "https://aur.archlinux.org/rpc/v5/info/${1//-/_}")
+    packageBase=$(jq -r .results[].PackageBase <<< "${depRepoQuery}")
+  fi
+
+  echo "${packageBase}"
+  echo "Packagebase is: ${packageBase}" >&2
+  [ -n "${packageBase}" ]
+  return $?
+}
+
+# Attempt to resolve all dependencies of the package we want to build. Including AUR.
+function getAllDeps {
+
+  # If a dependency is not available in given repos assume we have to build it ourselves.
+  deps=(${depends[@]} ${makedepends[@]} ${checkdepends[@]} ${depends_i686[@]} ${depends_x86_64[@]})
+  for dep in ${deps[*]}
+  do
+    dep="$(sed -E -e 's/(<|>)=.*//g' -e 's/=.*//g' -e 's/(<|>).*//g' <<< "${dep}")" # Strip version requirements from a package name.
+    echo "[${criptName} Processing dep ${dep}..."
+    if ! checkPackageInRepos "${dep}"
+    then
+      echo "[${scriptName}] Acquiring AUR dependency ${dep}..."
+      hasAurDeps=1
+      if [ ! -d "deps/${dep}" ]
+      then
+        mkdir -p deps
+  
+          # Ask AUR what git path the dep is under (Sometimes does not match package name 1:1)
+        depRepoName=$(getAurPackageInfo "${dep}")
+        if [ -z "${depRepoName}" ]
+        then
+          echo "Can't find package for ${dep}, may be a generic reference with multiple package providers."
+          echo "Please solve this manually for now."
+          exit 1
+        fi
+        git clone "https://aur.archlinux.org/${depRepoName}.git" deps/${dep}
+      fi
+
+      # Invoke this script on the dependency and install it.
+      pushd deps/${dep} >/dev/null 2>&1
+      ${0} --install --noconfirm ${makepkgArgs[*]} -si --noconfirm --dep
+      popd >/dev/null 2>&1
+
+    else
+      # Check if the package exists or if its provided by something else.
+      # Store the result for installation.
+      if pacman -Si ${dep} >/dev/null 2>&1
+      then
+        depsToFetch+=("${dep}")
+      else
+        depRealName="$(pacman -Ss "${dep}" |head -n1 | cut -d' ' -f1)"
+        if [ ! -z "${depRealName}" ]
+        then
+          depsToFetch+=("${depRealName}")
+        fi
+      fi
+
+    fi
+  done
+  
+  if [ -n "${depsToFetch[*]}" ]
+  then
+    ${SUDO} pacman -Syu --noconfirm # Sync up and upgrade.
+    yes '' | ${SUDO} pacman -S --needed --asdeps ${depsToFetch[@]}
+  else
+    echo "No special deps required."
+  fi
+}
+
+# Attempt to build a package
+function makePackage {
+   echo "Building..."
+
+   # Check if already in repo and build deps
+  if . PKGBUILD
+  then
+    checkTargetPackageExists
+    getAllDeps
+  else
+    echo "Unable to read PKGBUILD"
+    exit 1
+  fi
+
+  # Sign any keys passed as an argument to the script
+  if [ -n "${keys}" ]
+  then
+    for key in ${keys[*]}
+    do
+      echo "Fetching: ${key}"
+    gpg --recv-key ${key}
+      echo "Signing: ${key}"
+    gpg --lsign ${key}
+    done
+  fi
+
+  # Sign any keys passed as an argument to the script (But for pacman-key)
+  if [ -n "${keysPacman}" ]
+  then
+    for key in ${keys[*]}
+    do
+      echo "Fetching: ${key}"
+    pacman-key -r ${key}
+      echo "Signing: ${key}"
+    pacman-key --lsign-key ${key}
+    done
+  fi
+
+
+
+   # Build our target
+  makepkg ${makepkgArgs[*]}
+
+}
+
+# Provision a docker container for building the desired package
+function createContainer {
+  echo "Creating container..."
+
+  # This script assumes you have recently run ./docker_update_archlinux before invoking.
+  #docker pull archlinux:latest
+
+  # Ensure there isn't a remaining container from a previously interrupted run
+  docker container rm -f "${BASENAME}" >/dev/null 2>&1
+
+  # Start a container with some critical pieces passed through. Plus the host's pacman cache.
+  # ulimit is specified to prevent `fakeroot` from hanging.
+  docker run \
+    -ti \
+    -d \
+    -v /var/cache/pacman:/var/cache/pacman \
+    -v ${PKGDEST}:${PKGDEST} \
+    -v ${0}:${0} \
+    -v ${PWD}:${PWD} \
+    --name ${BASENAME} \
+    --hostname ${BASENAME} \
+    -e BASENAME=${BASENAME} \
+    -e REPOBASE=${REPOBASE} \
+    -e REPONAME=${REPONAME} \
+    -e REPOARCH=${REPOARCH} \
+    -e  PKGDEST=${PKGDEST} \
+    --ulimit nofile=1024:524288 \
+    archlinux:latest \
+    bash
+
+  # Update and configure the environment for building.
+  docker exec -w "${PWD}" ${BASENAME} pacman-key --init
+
+  # Ignore initramfs packages to avoid generating needless images in the container.
+  #docker exec -w "${PWD}" ${BASENAME} sed -i '/#IgnorePkg/a IgnorePkg = booster dracut mkinitcpio initramfs' /etc/pacman.conf
+
+  docker exec -w "${PWD}" "${BASENAME}" pacman -Sydd linux --noconfirm --needed --ignore booster,dracut,mkinitcpio,initramfs # Alone to ignore deps
+  docker exec -w "${PWD}" "${BASENAME}" pacman -Syu        --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
+  docker exec -w "${PWD}" "${BASENAME}" useradd -d ${HOME} -m -u ${UID} ${USER}
+  docker exec -w "${PWD}" "${BASENAME}" chown -R ${USER} ${HOME}
+  docker exec -w "${PWD}" "${BASENAME}" bash -c 'echo MAKEFLAGS=\"--jobs=\$\(nproc\)\" | tee -a /etc/makepkg.conf >/dev/null 2>&1'
+  docker exec -w "${PWD}" "${BASENAME}" bash -c "tee /etc/sudoers.d/user_${USER} <<< '${USER} ALL=(ALL) NOPASSWD: ALL'"
+
+  # Build
+  docker exec -w "${PWD}" -u ${USER} ${BASENAME} ${0} ${arguments[*]}
+  buildCode=$?
+
+  # Always clean up
+  docker container rm -f "${BASENAME}" >/dev/null 2>&1
+  exit ${buildCode}
+}
+
+#  ____             _       
+# | __ )  ___  __ _(_)_ __  
+# |  _ \ / _ \/ _` | | '_ \ 
+# | |_) |  __/ (_| | | | | |
+# |____/ \___|\__, |_|_| |_|
+#             |___/         
+
+scriptName=$(basename $0)
+declare -a makepkgArgs
+
+arguments=($@) # For docker if invoked.
+while [ $# -gt 0 ]
+do
+  case "$(tr '[:upper:]' '[:lower:]'<<<$1)" in
+    -f|-force|--f|--force)
+      echo "Forcing build..."
+      force=1
+      makepkgArgs+=(-f)
+    ;;
+    --dep)
+      dep=1
+    ;;
+    --key)
+      echo "${2} will be pulled and signed for this build."
+      keys+=(${2})
+      shift
+    ;;
+    --pacmankey)
+      echo "${2} will be pulled and signed for this build. (pacman-key)"
+      keysPacman+=(${2})
+      shift
+    ;;
+    *)
+      echo "Passing to makepkg: $1"
+      makepkgArgs+=(${1})
+    ;;
+    esac
+  shift
+done
+
+# Attempt to guess unfilled variables and set some defaults.
+
+# When unset, assume repositories live under /repo
+[ -z "${REPOBASE}" ] && export REPOBASE=/repo
+
+# Attempt to resolve the package name from jenkins variables
+if [ -z "${BASENAME}" ]
+then
+  if [ -n "${JOB_BASE_NAME}" ]
+  then
+    export BASENAME="${JOB_BASE_NAME}"
+  elif [ -n "${JOB_NAME_KEYS}" ]
+  then
+    export BASENAME="${JOB_NAME_KEYS[-1]}"
+  fi
+fi
+
+# Attempt to resolve the intended architecture for this package from jenkins variables
+if [ -z "${REPOARCH}" ]
+then
+
+  if [ ${#JOB_NAME_KEYS[*]} -gt 0 ]
+  then
+
+    for key in ${!JOB_NAME_KEYS[*]}
+    do
+      if [[ ${JOB_NAME_KEYS[${key}]} =~ ${supportedArchs} ]]
+      then
+        REPOARCH="${JOB_NAME_KEYS[${key}]}"
+        REPOARCHINDEX=${key}
+      fi
+    done
+  fi
+fi
+
+# Attempt to resolve the name of the repository by looking at the directory before a discovered architecture.
+if [ -z "${REPONANE}" ]
+then
+  if [ -n "${REPOARCHINDEX}" ]
+  then
+    REPONAME=${JOB_NAME_KEYS[$(((${REPOARCHINDEX}-1)))]}
+  fi
+fi
+
+if [ -z "${PKGDEST}"  ]
+then
+  PKGDEST_PROPOSED="${REPOBASE}/${REPONAME}/${REPOARCH}"
+  if [ -d ${PKGDEST_PROPOSED} ]
+  then
+    export PKGDEST=${PKGDEST_PROPOSED}
+  else
+    echo "No PKGDEST provided and autodiscovered directory tree does not exist: ${PKGDEST_PROPOSED}."
+    exit 1
+  fi
+fi
+
+echo "REPOBASE=${REPOBASE}"
+echo "REPONAME=${REPONAME}"
+echo "REPOARCH=${REPOARCH}"
+echo "BASENAME=${BASENAME}"
+echo " PKGDEST=${PKGDEST}"
+
+####################
+
+# Check if we have already got the package
+# Skip this check for -git packages, or when -force/-f is specified.
+if checkPackageAlreadyBuilt 
+then
+  if [ -n "${force}" ]
+  then
+    echo "Forcing rebuild..."
+
+  elif [ -n "${dep}" ]
+  then
+    echo "Continuing so makepkg can install this as a dependency..."
+
+  elif [[ ${BASENAME} =~ -git$ ]]
+  then
+    echo "This is a git package. Continuing in case of new release."
+
+  else
+    echo "Use -f/-force to force a rebuild."
+    exit 13
+  fi
+fi
+
+
+[ -z "${REPONAME}" ] && { echo "Cannot proceed, missing critical var: REPONAME" ; exit 1 ;}
+[ -z "${REPOARCH}" ] && { echo "Cannot proceed, missing critical var: REPOARCH" ; exit 1 ;}
+
+
+
+# Check environment is ready for docker activities
+# and either build the package or make a container to do so.
+if isDocker
+then
+  if [ -d "${PKGDEST}" ]
+  then
+    makePackage
+  else
+    echo "Could not determine the intended package directory."
+    exit 1
+  fi
+
+else
+  if ! systemctl is-active docker >/dev/null 2>&1
+  then
+    echo "Docker isn't running!"
+    exit 1
+  elif ! docker ps >/dev/null 2>&1
+  then
+    echo "Missing permission to use docker!"
+    echo "Try: $SUDO usermod -aG docker ${USER}"
+echo
+    exit 1
+  fi
+
+  createContainer
+fi
