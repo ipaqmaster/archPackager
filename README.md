@@ -67,3 +67,7 @@ This script can be invoked either manually at will or through a new Jenkins job.
 2. Schedule it to "Build periodically" at midnight using value: `0 0 * * *` (Midnightly)
 3. After cloning this repo to the homedir of the `jenkins` user, create a new `Execute shell` option under `Build Steps` with this content: `~/archPackager/docker_update_archlinux`
 4. Save and run the job.
+
+#### repo_prune
+
+The ./repo_prune script is used for culling older packages as time goes on to save on disk space. A new job can be created which just calls out to ./repo_prune and it will assume the top level directory `/repo` by default. Otherwise a repo top level directory can be given as an argument. This script serves to cull old package files as new ones come in.
