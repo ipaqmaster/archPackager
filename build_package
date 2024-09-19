@@ -34,7 +34,7 @@ function checkPackageAlreadyBuilt {
 
     if [ -f "${packageFilepath}" ]
     then
-      echo "Package already built: ${packageFilepath}"
+      echo "[${scriptName}] Package already built: ${packageFilepath}"
       return 0
     else
       return 1
@@ -56,14 +56,14 @@ function checkPackageInRepos {
 function checkTargetPackageExists {
   if grep -qs 'archlinux/packaging/packages' .git/config
   then
-    echo "This appears to be an official package. Skipping obsoletion check."
+    echo "[${scriptName}] This appears to be an official package. Skipping obsoletion check."
     return
   fi
 
   if checkPackageInRepos ${pkgname}
   then
-    echo "This AUR package may be obsoleted!"
-    echo "Pacman findings:"
+    echo "[${scriptName}] This AUR package may be obsoleted!"
+    echo "[${scriptName}] Pacman findings:"
     while read package
     do
       echo -e "\t${package}"
@@ -80,7 +80,7 @@ function getAurPackageInfo {
   # If we fail to resolve a package, desperately try again replacing hyphens with underscores.
   if [ -z "${packageBase}" ]
   then
-    echo "Re-searching package info with underscores..." >&2
+    echo "[${scriptName}] Re-searching package info with underscores..." >&2
     depRepoQuery=$(curl -s -X 'GET' -H 'accept: application/json' "https://aur.archlinux.org/rpc/v5/info/${1//-/_}")
     packageBase=$(jq -r .results[].PackageBase <<< "${depRepoQuery}")
   fi
@@ -111,8 +111,8 @@ function getAllDeps {
         depRepoName=$(getAurPackageInfo "${dep}")
         if [ -z "${depRepoName}" ]
         then
-          echo "Can't find package for ${dep}, may be a generic reference with multiple package providers."
-          echo "Please solve this manually for now."
+          echo "[${scriptName}] Can't find package for ${dep}, may be a generic reference with multiple package providers."
+          echo "[${scriptName}] Please solve this manually for now."
           exit 1
         fi
         git clone "https://aur.archlinux.org/${depRepoName}.git" deps/${dep}
@@ -145,13 +145,13 @@ function getAllDeps {
     ${SUDO} pacman -Syu --noconfirm # Sync up and upgrade.
     yes '' | ${SUDO} pacman -S --needed --asdeps ${depsToFetch[@]}
   else
-    echo "No special deps required."
+    echo "[${scriptName}] No special deps required."
   fi
 }
 
 # Attempt to build a package
 function makePackage {
-   echo "Building..."
+   echo "[${scriptName}] Building..."
 
    # Check if already in repo and build deps
   if . PKGBUILD
@@ -159,7 +159,7 @@ function makePackage {
     checkTargetPackageExists
     getAllDeps
   else
-    echo "Unable to read PKGBUILD"
+    echo "[${scriptName}] Unable to read PKGBUILD"
     exit 1
   fi
 
@@ -168,9 +168,9 @@ function makePackage {
   then
     for key in ${keys[*]}
     do
-      echo "Fetching: ${key}"
+      echo "[${scriptName}] Fetching: ${key}"
     gpg --recv-key ${key}
-      echo "Signing: ${key}"
+      echo "[${scriptName}] Signing: ${key}"
     gpg --lsign ${key}
     done
   fi
@@ -180,9 +180,9 @@ function makePackage {
   then
     for key in ${keys[*]}
     do
-      echo "Fetching: ${key}"
+      echo "[${scriptName}] Fetching: ${key}"
     pacman-key -r ${key}
-      echo "Signing: ${key}"
+      echo "[${scriptName}] Signing: ${key}"
     pacman-key --lsign-key ${key}
     done
   fi
@@ -196,7 +196,7 @@ function makePackage {
 
 # Provision a docker container for building the desired package
 function createContainer {
-  echo "Creating container..."
+  echo "[${scriptName}] Creating container..."
 
   # This script assumes you have recently run ./docker_update_archlinux before invoking.
   #docker pull archlinux:latest
@@ -264,7 +264,7 @@ while [ $# -gt 0 ]
 do
   case "$(tr '[:upper:]' '[:lower:]'<<<$1)" in
     -f|-force|--f|--force)
-      echo "Forcing build..."
+      echo "[${scriptName}] Forcing build..."
       force=1
       makepkgArgs+=(-f)
     ;;
@@ -272,17 +272,17 @@ do
       dep=1
     ;;
     --key)
-      echo "${2} will be pulled and signed for this build."
+      echo "[${scriptName}] ${2} will be pulled and signed for this build."
       keys+=(${2})
       shift
     ;;
     --pacmankey)
-      echo "${2} will be pulled and signed for this build. (pacman-key)"
+      echo "[${scriptName}] ${2} will be pulled and signed for this build. (pacman-key)"
       keysPacman+=(${2})
       shift
     ;;
     *)
-      echo "Passing to makepkg: $1"
+      echo "[${scriptName}] Passing to makepkg: $1"
       makepkgArgs+=(${1})
     ;;
     esac
@@ -340,20 +340,19 @@ then
   then
     export PKGDEST=${PKGDEST_PROPOSED}
   else
-    echo "No PKGDEST provided and autodiscovered directory tree does not exist: ${PKGDEST_PROPOSED}."
+    echo "[${scriptName}] No PKGDEST provided and autodiscovered directory tree does not exist: ${PKGDEST_PROPOSED}."
     exit 1
   fi
 fi
 
-echo "REPOBASE=${REPOBASE}"
-echo "REPONAME=${REPONAME}"
-echo "REPOARCH=${REPOARCH}"
-echo "BASENAME=${BASENAME}"
-echo " PKGDEST=${PKGDEST}"
+echo "[${scriptName}] REPOBASE=${REPOBASE}"
+echo "[${scriptName}] REPONAME=${REPONAME}"
+echo "[${scriptName}] REPOARCH=${REPOARCH}"
+echo "[${scriptName}] BASENAME=${BASENAME}"
+echo "[${scriptName}]  PKGDEST=${PKGDEST}"
 
-[ -z "${REPONAME}" ] && { echo "Cannot proceed, missing critical var: REPONAME" ; exit 1 ;}
-[ -z "${REPOARCH}" ] && { echo "Cannot proceed, missing critical var: REPOARCH" ; exit 1 ;}
-####################
+[ -z "${REPONAME}" ] && { echo "[${scriptName}] Cannot proceed, missing critical var: REPONAME" ; exit 1 ;}
+[ -z "${REPOARCH}" ] && { echo "[${scriptName}] Cannot proceed, missing critical var: REPOARCH" ; exit 1 ;}
 
 # Check if we have already got the package
 # Skip this check for -git packages, or when -force/-f is specified.
@@ -361,7 +360,7 @@ if checkPackageAlreadyBuilt
 then
   if [ -n "${force}" ]
   then
-    echo "Forcing rebuild..."
+    echo "[${scriptName}] Forcing rebuild..."
 
   elif [ -n "${dep}" ]
   then
@@ -369,17 +368,13 @@ then
 
   elif [[ ${BASENAME} =~ -git$ ]]
   then
-    echo "This is a git package. Continuing in case of new release."
+    echo "[${scriptName}] This is a git package. Continuing in case of new release."
 
   else
-    echo "Use -f/-force to force a rebuild."
+    echo "[${scriptName}] Use -f/-force to force a rebuild."
     exit 13
   fi
 fi
-
-
-
-
 
 # Check environment is ready for docker activities
 # and either build the package or make a container to do so.
@@ -389,19 +384,19 @@ then
   then
     makePackage
   else
-    echo "Could not determine the intended package directory."
+    echo "[${scriptName}] Could not determine the intended package directory."
     exit 1
   fi
 
 else
   if ! systemctl is-active docker >/dev/null 2>&1
   then
-    echo "Docker isn't running!"
+    echo "[${scriptName}] Docker isn't running!"
     exit 1
   elif ! docker ps >/dev/null 2>&1
   then
-    echo "Missing permission to use docker!"
-    echo "Try: $SUDO usermod -aG docker ${USER}"
+    echo "[${scriptName}] Missing permission to use docker!"
+    echo "[${scriptName}] Try: $SUDO usermod -aG docker ${USER}"
 echo
     exit 1
   fi
