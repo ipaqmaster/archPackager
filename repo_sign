@@ -1,0 +1,117 @@
+#!/bin/bash
+
+# This script expects this variable to be defined.
+if [ -z "${gpg_passphrase}" ]
+then
+  echo "Please pass as secure environment variable: gpg_passphrase for signing."
+fi
+
+#  _____                 _
+# |  ___|   _ _ __   ___| |_ ___
+# | |_ | | | | '_ \ / __| __/ __|
+# |  _|| |_| | | | | (__| |_\__ \
+# |_|   \__,_|_| |_|\___|\__|___/
+#
+
+
+function verifyThing {
+    if [ ! -f "${file}.sig" ]
+    then
+      echo "No signature: ${file}"
+      return 1
+    fi
+
+     # While this would help verify large files quicker it catches others.
+     # We should just verify them by argument or default.
+     #fileTimestamp=$(stat -c %Y "${file}")
+     #sigTimestamp=$(stat -c %Y "${file}.sig")
+     #difference=$((( ${fileTimestamp} - ${sigTimestamp} )))
+     #difference=${difference/-/} # Remove possible negative
+     ## Return false if signature timestamp is much older than the file.
+     #if [ ${difference} > 3600 ]
+     #then
+     #  echo "Old signature: ${file} (${difference})"
+     # return 1
+     #fi
+
+    if gpg --quiet --verify ${file}.sig > /dev/null 2>&1
+    then
+      echo "Valid signature: ${file}"
+      return 0
+    else
+      echo "Invalid signature: ${file}"
+      return 1
+    fi
+}
+
+function signThing {
+  echo "Signing: ${file}."
+  gpg -b --yes --pinentry-mode loopback \
+      --passphrase "${gpg_passphrase}" \
+      --output "${file}.sig" \
+      --sign "${file}"
+
+  if [[  "${file}" =~ ^.*.zst$ ]]
+  then
+    repo-add -s ${REPODIR}/${REPONAME}.db.tar.gz "$file"
+  fi
+}
+
+
+#  ____             _
+# | __ )  ___  __ _(_)_ __
+# |  _ \ / _ \/ _` | | '_ \
+# | |_) |  __/ (_| | | | | |
+# |____/ \___|\__, |_|_| |_|
+#             |___/
+
+while [ $# -gt 0 ]
+do
+  case "$(tr '[:upper:]' '[:lower:]'<<<$1)" in
+    -f|-force|--f|--force)
+      echo "Forcing verification of larger packages..."
+      force=1
+    ;;
+    esac
+  shift
+done
+
+# Make some assumptions if needed.
+[ -z "${REPOBASE}" ] && export REPOBASE=/repo
+
+# Enumerate and sign all repos and their respective packages
+find ${REPOBASE}/ -name '*.zst' -printf %h\\n | sort -u | while read REPODIR
+do
+  echo ""
+  REPO_DIR_KEYS=(${REPODIR//// })
+  # Assume the repo name is the directory before the architecture directory.
+  export REPONAME="${REPO_DIR_KEYS[-2]}"
+
+  echo -e "REPODIR=${REPOBASE}"
+  echo -e "REPONAME=${REPONAME}"
+
+  if [ $(find ${REPODIR}/*.tar.gz | wc -l) -eq 0 ]
+  then
+    echo "Repo doesn't seem to exist. Creating..."
+    repo-add ${REPODIR}/${REPONAME}.db.tar.gz ${REPODIR}/*.zst
+  fi
+
+  # Sign any outlying ZSTs and add them to the repo.
+  for file in ${REPODIR}/*.{db,gz,zst}
+  do
+    verifyThing || signThing
+      if [ "$1" == "verify" ] 
+      then
+        size=$(stat -c%s "$file")
+        if [ $size -le 104857600 ] || [[ -n "${force}" ]] # Do not verify items over 100MB by default.
+        then
+          if ! verifyThing
+          then
+            signThing
+          fi
+        else
+          echo "$file exceeds 100MB, not bothering with verification."
+        fi
+      fi
+  done
+done
