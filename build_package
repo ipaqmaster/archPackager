@@ -352,6 +352,8 @@ echo "REPOARCH=${REPOARCH}"
 echo "BASENAME=${BASENAME}"
 echo " PKGDEST=${PKGDEST}"
 
+[ -z "${REPONAME}" ] && { echo "Cannot proceed, missing critical var: REPONAME" ; exit 1 ;}
+[ -z "${REPOARCH}" ] && { echo "Cannot proceed, missing critical var: REPOARCH" ; exit 1 ;}
 ####################
 
 # Check if we have already got the package
@@ -377,8 +379,6 @@ then
 fi
 
 
-[ -z "${REPONAME}" ] && { echo "Cannot proceed, missing critical var: REPONAME" ; exit 1 ;}
-[ -z "${REPOARCH}" ] && { echo "Cannot proceed, missing critical var: REPOARCH" ; exit 1 ;}
 
 
 
