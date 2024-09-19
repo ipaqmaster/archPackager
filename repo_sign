@@ -15,41 +15,41 @@ fi
 
 
 function verifyThing {
-    if [ ! -f "${file}.sig" ]
-    then
-      echo "No signature: ${file}"
-      return 1
-    fi
+  if [ ! -f "${file}.sig" ]
+  then
+    echo "No signature: ${file}"
+    return 1
+  fi
 
-     # While this would help verify large files quicker it catches others.
-     # We should just verify them by argument or default.
-     #fileTimestamp=$(stat -c %Y "${file}")
-     #sigTimestamp=$(stat -c %Y "${file}.sig")
-     #difference=$((( ${fileTimestamp} - ${sigTimestamp} )))
-     #difference=${difference/-/} # Remove possible negative
-     ## Return false if signature timestamp is much older than the file.
-     #if [ ${difference} > 3600 ]
-     #then
-     #  echo "Old signature: ${file} (${difference})"
-     # return 1
-     #fi
+  # While this would help verify large files quicker it catches others.
+  # We should just verify them by argument or default.
+  #fileTimestamp=$(stat -c %Y "${file}")
+  #sigTimestamp=$(stat -c %Y "${file}.sig")
+  #difference=$((( ${fileTimestamp} - ${sigTimestamp} )))
+  #difference=${difference/-/} # Remove possible negative
+  ## Return false if signature timestamp is much older than the file.
+  #if [ ${difference} > 3600 ]
+  #then
+  #  echo "Old signature: ${file} (${difference})"
+  # return 1
+  #fi
 
-    if gpg --quiet --verify ${file}.sig > /dev/null 2>&1
-    then
-      echo "Valid signature: ${file}"
-      return 0
-    else
-      echo "Invalid signature: ${file}"
-      return 1
-    fi
+  if gpg --quiet --verify ${file}.sig > /dev/null 2>&1
+  then
+    echo "Valid signature: ${file}"
+    return 0
+  else
+    echo "Invalid signature: ${file}"
+    return 1
+  fi
 }
 
 function signThing {
   echo "Signing: ${file}."
   gpg -b --yes --pinentry-mode loopback \
-      --passphrase "${gpg_passphrase}" \
-      --output "${file}.sig" \
-      --sign "${file}"
+    --passphrase "${gpg_passphrase}" \
+    --output "${file}.sig" \
+    --sign "${file}"
 
   if [[  "${file}" =~ ^.*.zst$ ]]
   then
@@ -71,8 +71,12 @@ do
     -f|-force|--f|--force)
       echo "Forcing verification of larger packages..."
       force=1
-    ;;
-    esac
+      ;;
+    -verify|--verify)
+      echo "Verifying smaller packages..."
+      verify=1
+      ;;
+  esac
   shift
 done
 
@@ -96,22 +100,31 @@ do
     repo-add ${REPODIR}/${REPONAME}.db.tar.gz ${REPODIR}/*.zst
   fi
 
-  # Sign any outlying ZSTs and add them to the repo.
+  # Sign anything without a .sig file.
   for file in ${REPODIR}/*.{db,gz,zst}
   do
-    verifyThing || signThing
-      if [ "$1" == "verify" ] 
-      then
-        size=$(stat -c%s "$file")
-        if [ $size -le 104857600 ] || [[ -n "${force}" ]] # Do not verify items over 100MB by default.
-        then
-          if ! verifyThing
-          then
-            signThing
-          fi
-        else
-          echo "$file exceeds 100MB, not bothering with verification."
-        fi
-      fi
+    if ! [ -f "${file}.sig" ] 
+    then
+      signThing
+    fi
   done
+
+
+
+  if [ -n "${verify}" ]
+  then
+    for file in ${REPODIR}/*.{db,gz,zst}
+    do
+      size=$(stat -c%s "$file")
+      if [ $size -le 104857600 ] || [[ -n "${force}" ]] # Do not verify items over 100MB by default.
+      then
+        if ! verifyThing
+        then
+          signThing
+        fi
+      else
+        echo "Skipping due to 100MB limit: ${file}"
+      fi
+    done
+  fi
 done
