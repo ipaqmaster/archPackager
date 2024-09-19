@@ -52,8 +52,18 @@ Personally I delete the worksapce before and after the build to address storage 
 
 Notice the repo has a `keys/pgp` directory which contains three keys.
 
-After cloning this repository to the home directory of the jenkins build server user invoke it with an Execute shell Build Step which contains: `$HOME/archPackager/build_package # incomplete`
+After cloning this repository to the home directory of the jenkins build server user invoke it with an `Execute shell` option under `Build Steps` containing: `$HOME/archPackager/build_package # incomplete`
 
 This would do for most packages but given this repository needs to trust three externally signed pgp public keys we must describe them to the script so the build process can trust them when verifying key files of the build: `$HOME/archPackager/build_package --key 647F28654894E3BD457199BE38DBBDC86092693E --key 83BC8889351B5DEBBB68416EB8AC08600F108CDF --key ABAF11C65A2970B130ABE3C479BE3E4300411886`
 
 Making sure the directories `/repo/myOfficialPackageRepo/x86_64` exists the job should now be capable of building a package. Make sure the jenkins user has been added to the `docker` group and that the service is running.
+
+
+#### Nightly archlinux:latest docker image preparation
+
+This script can be invoked either manually at will or through a new Jenkins job. If you build a lot of packages I highly recommend using this method to reduce network consumption and preserve local resources working from this base image rather than reinstalling packages for each build container.
+
+1. Create a new job in Docker of any name, preferably: `docker_update_archlinux`
+2. Schedule it to "Build periodically" at midnight using value: `0 0 * * *` (Midnightly)
+3. After cloning this repo to the homedir of the `jenkins` user, create a new `Execute shell` option under `Build Steps` with this content: `~/archPackager/docker_update_archlinux`
+4. Save and run the job.
