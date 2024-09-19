@@ -316,7 +316,7 @@ then
 
     for key in ${!JOB_NAME_KEYS[*]}
     do
-      if [[ ${JOB_NAME_KEYS[${key}]} =~ ${supportedArchs} ]]
+      if [[ ${supportedArchs[@]} =~ ${JOB_NAME_KEYS[${key}]} ]]
       then
         REPOARCH="${JOB_NAME_KEYS[${key}]}"
         REPOARCHINDEX=${key}
