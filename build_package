@@ -366,7 +366,22 @@ then
 
   elif [ -n "${dep}" ]
   then
-    echo "Continuing so makepkg can install this as a dependency..."
+    echo "[${scriptName}] Continuing so makepkg can install this as a dependency..."
+
+    # If our repo is signed, make sure we trust it.
+    if [ -f "${PKGDEST}/${REPONAME}.db.sig" ]
+    then
+      set -o pipefail
+      repoPublicKey=$(pacman-key --verify "${PKGDEST}/${REPONAME}.db.sig" 2>&1 | grep -Po '[A-F0-9]{40}')
+      repoPublicKeyVerifyOutcome=$?
+      set +o pipefail
+      if [ -n "${repoPublicKey}" ] && [ ${repoPublicKeyVerifyOutcome} -gt 0 ]
+      then
+        echo "[${scriptName}] Trusting this repository's signature with pacman-key so existing package files may be used."
+        keysPacman+=(${repoPublicKey})
+        signKeys
+      fi
+    fi
 
   elif [[ ${BASENAME} =~ -git$ ]]
   then
