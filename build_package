@@ -168,9 +168,9 @@ function signKeys {
     for key in ${keysPacman[*]}
     do
       echo "[${scriptName}] Fetching: ${key}"
-    pacman-key -r ${key}
+    ${SUDO} pacman-key -r ${key}
       echo "[${scriptName}] Signing: ${key}"
-    pacman-key --lsign-key ${key}
+    ${SUDO} pacman-key --lsign-key ${key}
     done
   fi
 }
