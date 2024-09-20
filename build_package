@@ -149,20 +149,7 @@ function getAllDeps {
   fi
 }
 
-# Attempt to build a package
-function makePackage {
-   echo "[${scriptName}] Building..."
-
-   # Check if already in repo and build deps
-  if . PKGBUILD
-  then
-    checkTargetPackageExists
-    getAllDeps
-  else
-    echo "[${scriptName}] Unable to read PKGBUILD"
-    exit 1
-  fi
-
+function signKeys {
   # Sign any keys passed as an argument to the script
   if [ -n "${keys}" ]
   then
@@ -178,7 +165,7 @@ function makePackage {
   # Sign any keys passed as an argument to the script (But for pacman-key)
   if [ -n "${keysPacman}" ]
   then
-    for key in ${keys[*]}
+    for key in ${keysPacman[*]}
     do
       echo "[${scriptName}] Fetching: ${key}"
     pacman-key -r ${key}
@@ -186,8 +173,23 @@ function makePackage {
     pacman-key --lsign-key ${key}
     done
   fi
+}
 
+# Attempt to build a package
+function makePackage {
+   echo "[${scriptName}] Building..."
 
+   # Check if already in repo and build deps
+  if . PKGBUILD
+  then
+    checkTargetPackageExists
+    getAllDeps
+  else
+    echo "[${scriptName}] Unable to read PKGBUILD"
+    exit 1
+  fi
+
+  signKeys
 
    # Build our target
   makepkg ${makepkgArgs[*]}
