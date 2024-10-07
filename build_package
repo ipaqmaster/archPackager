@@ -240,7 +240,7 @@ function createContainer {
   docker exec -w "${PWD}" "${BASENAME}" bash -c "tee /etc/sudoers.d/user_${USER} <<< '${USER} ALL=(ALL) NOPASSWD: ALL'"
 
   # Build
-  docker exec -w "${PWD}" -u ${USER} ${BASENAME} ${0} ${arguments[*]}
+  docker exec -w "${PWD}" -u ${USER} ${BASENAME} bash -l ${0} ${arguments[*]}
   buildCode=$?
 
   # Always clean up
