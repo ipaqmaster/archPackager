@@ -130,7 +130,7 @@ function getAllDeps {
       then
         depsToFetch+=("${dep}")
       else
-        depRealName="$(pacman -Ss "${dep}" |head -n1 | cut -d' ' -f1)"
+        depRealName="$(pacman -Ss "^${dep}$" |head -n1 | cut -d' ' -f1)"
         if [ ! -z "${depRealName}" ]
         then
           depsToFetch+=("${depRealName}")
