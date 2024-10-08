@@ -184,6 +184,14 @@ function makePackage {
   then
     checkTargetPackageExists
     getAllDeps
+
+    # Fetch and sign any pgp keys this PKGBUILD intends to verify content with.
+    if [ -n "${validpgpkeys[*]}" ]
+    then
+      keys+=(${validpgpkeys[*]})
+      signKeys
+    fi
+
   else
     echo "[${scriptName}] Unable to read PKGBUILD"
     exit 1
