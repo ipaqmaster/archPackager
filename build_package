@@ -106,13 +106,21 @@ function getAllDeps {
       if [ ! -d "deps/${dep}" ]
       then
         mkdir -p deps
+
+
+        # Check if we can resolve this package from a manually specified dependency
+        if [ -n "${packagePreferences[${dep}]}" ]
+        then
+          echo "[${scriptName}] Using user preference: ${dep}=${packagePreferences[${dep}]}."
+          dep="${packagePreferences[${dep}]}"
+        fi
   
           # Ask AUR what git path the dep is under (Sometimes does not match package name 1:1)
         depRepoName=$(getAurPackageInfo "${dep}")
         if [ -z "${depRepoName}" ]
         then
           echo "[${scriptName}] Can't find package for ${dep}, may be a generic reference with multiple package providers."
-          echo "[${scriptName}] Please solve this manually for now."
+          echo "[${scriptName}] If you have a preference provider consider using '--preferred ${dep}=someProviderPackage' otherwise this must be manually resolved."
           exit 1
         fi
         git clone "https://aur.archlinux.org/${depRepoName}.git" deps/${dep}
@@ -264,7 +272,8 @@ function createContainer {
 #             |___/         
 
 scriptName=$(basename $0)
-declare -a makepkgArgs
+declare -a  makepkgArgs
+declare -AG packagePreferences
 
 # Install any dependencies
 $SUDO pacman -S --needed --asdeps jq
@@ -289,6 +298,14 @@ do
     --pacmankey)
       echo "[${scriptName}] ${2} will be pulled and signed for this build. (pacman-key)"
       keysPacman+=(${2})
+      shift
+    ;;
+    --preferred|--preference)
+      echo "[${scriptName}] Setting package preference: ${2}"
+       package="$(cut -d= -f1  <<< ${2})"
+      provider="$(cut -d= -f2- <<< ${2})"
+      packagePreferences[${package}]="${provider}"
+      echo ${packagePreferences[zfs]}
       shift
     ;;
     *)
