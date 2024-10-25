@@ -183,12 +183,33 @@ function signKeys {
   fi
 }
 
+# Parse .SRCINFO for information regarding the package
+function parseSrcinfo {
+  while read line
+  do
+    key=$(cut -d= -f1    <<< "${line}" | tr -d ' ')
+    value=$(cut -d= -f2- <<< "${line}" | tr -d ' ')
+
+    # Ignore empty lines
+    [ -z "${line}" ] && continue
+
+    declare -a ${key}+="(\"${value}\")" # Works but while loop does not set them globally
+    echo "${key}+=(\"${value}\")"
+    #echo "$key+=(\"${value}\")"
+    #$key+=("${value}")
+  done < .SRCINFO
+}
+
+function readSrcinfo {
+  eval "$(parseSrcinfo)"
+}
+
 # Attempt to build a package
 function makePackage {
    echo "[${scriptName}] Building..."
 
    # Check if already in repo and build deps
-  if . PKGBUILD
+   if readSrcinfo
   then
     checkTargetPackageExists
     getAllDeps
