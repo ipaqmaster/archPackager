@@ -229,7 +229,7 @@ function makePackage {
   signKeys
 
    # Build our target
-  makepkg ${makepkgArgs[*]}
+  CARCH=${REPOARCH} makepkg ${makepkgArgs[*]}
 
 }
 
@@ -258,6 +258,7 @@ function createContainer {
     -e REPOBASE=${REPOBASE} \
     -e REPONAME=${REPONAME} \
     -e REPOARCH=${REPOARCH} \
+    -e    CARCH=${REPOARCH} \
     -e  PKGDEST=${PKGDEST} \
     --ulimit nofile=1024:524288 \
     archlinux:latest \
