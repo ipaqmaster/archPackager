@@ -271,6 +271,13 @@ function createContainer {
   #docker exec -w "${PWD}" ${BASENAME} sed -i '/#IgnorePkg/a IgnorePkg = booster dracut mkinitcpio initramfs' /etc/pacman.conf
 
   docker exec -w "${PWD}" "${BASENAME}" pacman -Sydd linux --noconfirm --needed --ignore booster,dracut,mkinitcpio,initramfs # Alone to ignore deps
+
+  if [ -n "${multilib}" ]
+  then
+    docker exec -w "${PWD}" "${BASENAME}" bash -c "echo '[multilib]'                         | tee -a /etc/pacman.conf"
+    docker exec -w "${PWD}" "${BASENAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
+  fi
+
   docker exec -w "${PWD}" "${BASENAME}" pacman -Syu        --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
   docker exec -w "${PWD}" "${BASENAME}" useradd -d ${HOME} -m -u ${UID} ${USER}
   docker exec -w "${PWD}" "${BASENAME}" chown -R ${USER} ${HOME}
@@ -321,6 +328,11 @@ do
       echo "[${scriptName}] ${2} will be pulled and signed for this build. (pacman-key)"
       keysPacman+=(${2})
       shift
+    ;;
+
+    --multilib)
+      echo "[${scriptName}] Multilib will be enabled."
+      multilib=1
     ;;
     --preferred|--preference)
       echo "[${scriptName}] Setting package preference: ${2}"
