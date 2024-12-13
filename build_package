@@ -281,6 +281,12 @@ function createContainer {
     docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
   fi
 
+  if [ -n "${extra}" ]
+  then
+    docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo '[extra]'                            | tee -a /etc/pacman.conf"
+    docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
+  fi
+
   docker exec -w "${PWD}" "${CONTAINERNAME}" pacman -Syu --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
   docker exec -w "${PWD}" "${CONTAINERNAME}" useradd -d ${HOME} -m -u ${UID} ${USER}
   docker exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
@@ -319,14 +325,17 @@ do
       force=1
       makepkgArgs+=(-f)
     ;;
+
     --dep)
       dep=1
     ;;
+
     --key)
       echo "[${scriptName}] ${2} will be pulled and signed for this build."
       keys+=(${2})
       shift
     ;;
+
     --pacmankey)
       echo "[${scriptName}] ${2} will be pulled and signed for this build. (pacman-key)"
       keysPacman+=(${2})
@@ -337,6 +346,12 @@ do
       echo "[${scriptName}] Multilib will be enabled."
       multilib=1
     ;;
+
+    --extra)
+      echo "[${scriptName}] Extra will be enabled."
+      extra=1
+    ;;
+
     --preferred|--preference)
       echo "[${scriptName}] Setting package preference: ${2}"
        package="$(cut -d= -f1  <<< ${2})"
@@ -345,10 +360,12 @@ do
       echo ${packagePreferences[zfs]}
       shift
     ;;
+
     *)
       echo "[${scriptName}] Passing to makepkg: $1"
       makepkgArgs+=(${1})
     ;;
+
     esac
   shift
 done
