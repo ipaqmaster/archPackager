@@ -237,11 +237,14 @@ function makePackage {
 function createContainer {
   echo "[${scriptName}] Creating container..."
 
+  # Filter unfriendly characters from the container name
+  CONTAINERNAME="$(tr -cd '[a-zA-Z0-9][a-zA-Z0-9_.-]' <<< "${BASENAME}")" 
+
   # This script assumes you have recently run ./docker_update_archlinux before invoking.
   #docker pull archlinux:latest
 
   # Ensure there isn't a remaining container from a previously interrupted run
-  docker container rm -f "${BASENAME}" >/dev/null 2>&1
+  docker container rm -f "${CONTAINERNAME}" >/dev/null 2>&1
 
   # Start a container with some critical pieces passed through. Plus the host's pacman cache.
   # ulimit is specified to prevent `fakeroot` from hanging.
@@ -252,8 +255,8 @@ function createContainer {
     -v ${PKGDEST}:${PKGDEST} \
     -v ${0}:${0} \
     -v ${PWD}:${PWD} \
-    --name ${BASENAME} \
-    --hostname ${BASENAME} \
+    --name ${CONTAINERNAME} \
+    --hostname ${CONTAINERNAME} \
     -e BASENAME=${BASENAME} \
     -e REPOBASE=${REPOBASE} \
     -e REPONAME=${REPONAME} \
@@ -265,31 +268,31 @@ function createContainer {
     bash
 
   # Update and configure the environment for building.
-  docker exec -w "${PWD}" ${BASENAME} pacman-key --init
+  docker exec -w "${PWD}" ${CONTAINERNAME} pacman-key --init
 
   # Ignore initramfs packages to avoid generating needless images in the container.
-  #docker exec -w "${PWD}" ${BASENAME} sed -i '/#IgnorePkg/a IgnorePkg = booster dracut mkinitcpio initramfs' /etc/pacman.conf
+  #docker exec -w "${PWD}" ${CONTAINERNAME} sed -i '/#IgnorePkg/a IgnorePkg = booster dracut mkinitcpio initramfs' /etc/pacman.conf
 
-  docker exec -w "${PWD}" "${BASENAME}" pacman -Sydd linux --noconfirm --needed --ignore booster,dracut,mkinitcpio,initramfs # Alone to ignore deps
+  docker exec -w "${PWD}" "${CONTAINERNAME}" pacman -Sydd linux --noconfirm --needed --ignore booster,dracut,mkinitcpio,initramfs # Alone to ignore deps
 
   if [ -n "${multilib}" ]
   then
-    docker exec -w "${PWD}" "${BASENAME}" bash -c "echo '[multilib]'                         | tee -a /etc/pacman.conf"
-    docker exec -w "${PWD}" "${BASENAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
+    docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo '[multilib]'                         | tee -a /etc/pacman.conf"
+    docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
   fi
 
-  docker exec -w "${PWD}" "${BASENAME}" pacman -Syu        --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
-  docker exec -w "${PWD}" "${BASENAME}" useradd -d ${HOME} -m -u ${UID} ${USER}
-  docker exec -w "${PWD}" "${BASENAME}" chown -R ${USER} ${HOME}
-  docker exec -w "${PWD}" "${BASENAME}" bash -c 'echo MAKEFLAGS=\"--jobs=\$\(nproc\)\" | tee -a /etc/makepkg.conf >/dev/null 2>&1'
-  docker exec -w "${PWD}" "${BASENAME}" bash -c "tee /etc/sudoers.d/user_${USER} <<< '${USER} ALL=(ALL) NOPASSWD: ALL'"
+  docker exec -w "${PWD}" "${CONTAINERNAME}" pacman -Syu --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
+  docker exec -w "${PWD}" "${CONTAINERNAME}" useradd -d ${HOME} -m -u ${UID} ${USER}
+  docker exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
+  docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c 'echo MAKEFLAGS=\"--jobs=\$\(nproc\)\" | tee -a /etc/makepkg.conf >/dev/null 2>&1'
+  docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "tee /etc/sudoers.d/user_${USER} <<< '${USER} ALL=(ALL) NOPASSWD: ALL'"
 
   # Build
-  docker exec -w "${PWD}" -u ${USER} ${BASENAME} bash -l ${0} ${arguments[*]}
+  docker exec -w "${PWD}" -u ${USER} ${CONTAINERNAME} bash -l ${0} ${arguments[*]}
   buildCode=$?
 
   # Always clean up
-  docker container rm -f "${BASENAME}" >/dev/null 2>&1
+  docker container rm -f "${CONTAINERNAME}" >/dev/null 2>&1
   exit ${buildCode}
 }
 
