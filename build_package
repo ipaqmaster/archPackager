@@ -3,8 +3,8 @@
 supportedArchs=(x86_64 armv7h aarch64 i686 pentium4 any)
 JOB_NAME_KEYS=(${JOB_NAME//// })
 
-#  _____                 _       
-# |  ___|   _ _ __   ___| |_ ___ 
+#  _____                 _
+# |  ___|   _ _ __   ___| |_ ___
 # | |_ | | | | '_ \ / __| __/ __|
 # |  _|| |_| | | | | (__| |_\__ \
 # |_|   \__,_|_| |_|\___|\__|___/
@@ -26,7 +26,7 @@ function checkPackageAlreadyBuilt {
     . PKGBUILD
 
     packageFilepath="${pkgname}-${epoch}${pkgver}-${pkgrel}-${arch}${PKGEXT}"
-    
+
     if [ -n "${PKGDEST}" ]
     then
       packageFilepath="${PKGDEST}/${packageFilepath}"
@@ -114,7 +114,7 @@ function getAllDeps {
           echo "[${scriptName}] Using user preference: ${dep}=${packagePreferences[${dep}]}."
           dep="${packagePreferences[${dep}]}"
         fi
-  
+
           # Ask AUR what git path the dep is under (Sometimes does not match package name 1:1)
         depRepoName=$(getAurPackageInfo "${dep}")
         if [ -z "${depRepoName}" ]
@@ -147,7 +147,7 @@ function getAllDeps {
 
     fi
   done
-  
+
   if [ -n "${depsToFetch[*]}" ]
   then
     ${SUDO} pacman -Syu --noconfirm # Sync up and upgrade.
@@ -238,7 +238,7 @@ function createContainer {
   echo "[${scriptName}] Creating container..."
 
   # Filter unfriendly characters from the container name
-  CONTAINERNAME="$(tr -cd '[a-zA-Z0-9][a-zA-Z0-9_.-]' <<< "${BASENAME}")" 
+  CONTAINERNAME="$(tr -cd '[a-zA-Z0-9][a-zA-Z0-9_.-]' <<< "${BASENAME}")"
 
   # This script assumes you have recently run ./docker_update_archlinux before invoking.
   #docker pull archlinux:latest
@@ -296,12 +296,12 @@ function createContainer {
   exit ${buildCode}
 }
 
-#  ____             _       
-# | __ )  ___  __ _(_)_ __  
-# |  _ \ / _ \/ _` | | '_ \ 
+#  ____             _
+# | __ )  ___  __ _(_)_ __
+# |  _ \ / _ \/ _` | | '_ \
 # | |_) |  __/ (_| | | | | |
 # |____/ \___|\__, |_|_| |_|
-#             |___/         
+#             |___/
 
 scriptName=$(basename $0)
 declare -a  makepkgArgs
@@ -420,7 +420,7 @@ echo "[${scriptName}]  PKGDEST=${PKGDEST}"
 
 # Check if we have already got the package
 # Skip this check for -git packages, or when -force/-f is specified.
-if checkPackageAlreadyBuilt 
+if checkPackageAlreadyBuilt
 then
   if [ -n "${force}" ]
   then
