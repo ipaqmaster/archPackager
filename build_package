@@ -20,10 +20,33 @@ function isDocker {
 # Check if our package already exists in the intended destination directory.
 function checkPackageAlreadyBuilt {
 
+  # If this is a python package, set PKGREL based on the currently installed python version
+  if grep -qs python PKGBUILD
+  then
+
+    echo "[${scriptName}] This package appears to be releated to python."
+    echo "[${scriptName}] Setting PKGREL based on the current latest python release on this system."
+    if ! grep -qs pythonPkgRel PKGBUILD
+    then
+      pythonPkgRel=$(find /usr/lib -mindepth 1 -maxdepth 1 -type d -name 'python*' -printf '%f\n' | sort -V | tail -n1 |grep -Eo '[0-9]' | tr -d '\n')
+
+      if ! [ -n "${pythonPkgRel}" ]
+      then
+        echo "[${scriptName}] Failed to detect system latest python version. Exiting."
+        exit 1
+      fi
+
+      echo "pkgrel=${pythonPkgRel} # pythonPkgRel" >> PKGBUILD
+
+    fi
+
+  fi
+
   if [ -f /etc/makepkg.conf ] && [ -f PKGBUILD ]
   then
     . /etc/makepkg.conf
     . PKGBUILD
+
 
     packageFilepath="${pkgname}-${epoch}${pkgver}-${pkgrel}-${arch}${PKGEXT}"
 
