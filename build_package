@@ -21,7 +21,8 @@ function isDocker {
 function checkPackageAlreadyBuilt {
 
   # If this is a python package, set PKGREL based on the currently installed python version
-  if grep -qs python PKGBUILD
+  . PKGBUILD
+  if [[ ${depends[@]} =~ python ]]
   then
 
     echo "[${scriptName}] This package appears to be releated to python."
