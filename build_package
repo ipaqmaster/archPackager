@@ -37,7 +37,7 @@ function checkPackageAlreadyBuilt {
         exit 1
       fi
 
-      echo "pkgrel=${pythonPkgRel} # pythonPkgRel" >> PKGBUILD
+      echo -e "\npkgrel=${pythonPkgRel} # pythonPkgRel" >> PKGBUILD
 
     fi
 
