@@ -122,6 +122,14 @@ function getAllDeps {
   for dep in ${deps[*]}
   do
     dep="$(sed -E -e 's/(<|>)=.*//g' -e 's/=.*//g' -e 's/(<|>).*//g' <<< "${dep}")" # Strip version requirements from a package name.
+
+    # Skip any circular dependencies
+    if [[ "${dep}" == "${BASENAME}" ]]
+    then
+      echo "[${scriptName}] Skipping circular dep ${dep}..."
+      continue
+    fi
+
     echo "[${scriptName}] Processing dep ${dep}..."
     if ! checkPackageInRepos "${dep}"
     then
