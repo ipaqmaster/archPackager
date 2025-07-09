@@ -98,8 +98,19 @@ function aarch64_build {
     fi
 
     wget --no-clobber https://raw.githubusercontent.com/archlinuxarm/archlinuxarm-keyring/master/archlinuxarm.gpg
-    ${SUDO} pacman-key --populate archlinuxarm
-    ${SUDO} pacman-key --lsign-key archlinuxarm
+    ${SUDO} pacman-key --add archlinuxarm.gpg
+
+    set -x
+    # Sign the archlinuxarm keys
+    pacman-key -l archlinuxarm | grep -Po '[A-F0-9]{40}' | \
+      while read archlinuxarmKey
+      do
+        ${SUDO} pacman-key --lsign-key ${archlinuxarmKey}
+      done
+
+    #${SUDO} mv -nv archlinuxarm.gpg /usr/share/pacman/keyrings/
+    ${SUDO} pacman-key --populate archlinuxarm  || exit 1
+    ${SUDO} pacman-key --lsign-key archlinuxarm || exit 1
 
     ${SUDO} pacstrap -M -K -C ${_scriptRoot}/pacman.aarch64.conf ${buildDir} archlinuxarm-keyring base git sudo || exit 1
 
@@ -111,23 +122,28 @@ function aarch64_build {
       ${SUDO} umount "${buildDir}/var/cache/pacman/pkg" || exit 1
     fi
 
+    # Clean out the buildDir
+    ${SUDO} rm -rfv ${buildDir:-/tmp/emergencyfallback}
+
   else
     echo "aarch64_build: Using existing archive: ${_scriptRoot}/arch-rootfs-aarch64.tar.gz"
   fi
 
-
   cat ${_scriptRoot}/arch-rootfs-aarch64.tar.gz | docker import - archlinux-aarch64:latest
 
-  # Clean out the buildDir
-  ${SUDO} rm -rfv ${buildDir:-/tmp/emergencyfallback}
 }
 
 function aarch64 {
   baseImageName="archlinux-aarch64:latest"
   extraArgs=(-v /var/cache/pacman/pkg/aarch64:/var/cache/pacman/pkg) # Always use the package cache on the host
 
-  # Check if we have already made this image and react accordingly
 
+  # Ensure we have qemu-aarch64-static and that it's ready for use.
+  # Prepare the host to chroot in
+  ${SUDO} pacman --needed --noconfirm -S qemu-user-static-binfmt qemu-user-static
+  ${SUDO} cp -nv /usr/lib/binfmt.d/qemu-aarch64-static.conf /etc/binfmt.d/
+
+  # Check if we have already made this image and react accordingly
   if [ -z "$(docker images -q archlinux-aarch64:latest)" ]; then
     echo "Missing ${baseImageName}. Building..."
     aarch64_build
@@ -135,13 +151,8 @@ function aarch64 {
     echo "${baseImageName} already exists. Skipping build."
   fi
 
-  # Ensure we have qemu-aarch64-static and that it's ready for use.
-  # Prepare the host to chroot in
-  ${SUDO} pacman --needed --noconfirm -S qemu-user-static-binfmt qemu-user-static
-  ${SUDO} cp -nv /usr/lib/binfmt.d/qemu-aarch64-static.conf /etc/binfmt.d/
-
   # Quickly test the container
-  docker run -ti --rm --name ${baseImageName}_testrun ${baseImageName} /bin/bash -c "echo hello world"
+  docker run -ti --rm --name ${baseImageName}_testrun ${baseImageName} /bin/bash -c "echo hello world [aarch64]" || exit 1
 
   # Update the image
   update_container
