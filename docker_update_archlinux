@@ -1,32 +1,158 @@
 #!/bin/bash
 
+
+# If uncommented, stores aarch64 packages to the host
+# Good for repeat installations without bothering the mirrors
+aarch64_pkg_cache=/var/cache/pacman/pkg/aarch64
+
+#  ____
+# |  _ \ _ __ ___ _ __
+# | |_) | '__/ _ \ '_ \
+# |  __/| | |  __/ |_) |
+# |_|   |_|  \___| .__/
+#                |_|
+
+[ $UID -ne 0 ] && SUDO=sudo # Sudo if not root
 _scriptPath=$(realpath $0)
 _scriptRoot="$(dirname $(realpath $0))"
 _scriptName="$(basename ${_scriptRoot})"
 
 
-baseImageName="archlinux:latest"
-
-if ! systemctl is-active docker >/dev/null 2>&1
+if [ -z "${CARCH}" ]
 then
-  echo "Docker not running!"
-  exit 1
-elif ! docker ps >/dev/null 2>&1
-then
-  echo "Unable to access docker!"
-  exit 1
+  ARCHITECTURE=$(uname -m)
+else
+  ARCHITECTURE=${CARCH}
 fi
 
 
-# Pull the latest archlinux:docker image to be updated.
-# This will overwrite any local latest image
-docker pull "${baseImageName}"
+if ! systemctl is-active docker >/dev/null 2>&1
+then
+  echo "Docker isn't running!"
+  exit 1
+elif ! docker ps >/dev/null 2>&1
+then
+  echo "Can't access docker!"
+  exit 1
+fi
 
-# Update a temporary container
+#  _____                 _   _
+# |  ___|   _ _ __   ___| |_(_) ___  _ __  ___
+# | |_ | | | | '_ \ / __| __| |/ _ \| '_ \/ __|
+# |  _|| |_| | | | | (__| |_| | (_) | | | \__ \
+# |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|___/
+#
 
-docker container rm "${_scriptName}" >/dev/null 2>&1
-docker run --name "${_scriptName}" "${baseImageName}" pacman -Syu --noconfirm
+function update_container {
+  if [ -z "${baseImageName}" ]
+  then
+    echo "update_container: baseImageName not set?"
+    exit 1
+  fi
 
-# Commit this container as the new latest image.
-docker commit "${_scriptName}" "${baseImageName}"
-docker container rm "${_scriptName}" >/dev/null 2>&1
+  echo "Updating ${baseImageName}..."
+
+  # Remove any previous update container
+  docker container rm "${_scriptName}" >/dev/null 2>&1
+
+  # Attempt to run updates
+  docker run ${extraArgs[@]} --name "${_scriptName}" "${baseImageName}" pacman -Syu --noconfirm || exit 1
+
+  # Commit the update container as the new latest image
+  docker commit       "${_scriptName}" "${baseImageName}"
+  docker container rm "${_scriptName}" >/dev/null 2>&1
+}
+
+function x86_64 {
+  baseImageName="archlinux:latest"
+
+  # Pull the latest archlinux:docker image to be updated.
+  # This will overwrite any local latest image
+  docker pull "${baseImageName}"
+
+  # Update the image
+  update_container
+}
+
+function aarch64_build {
+  buildDir="/tmp/aarch64_build"
+
+  if ! [ -f ${_scriptRoot}/arch-rootfs-aarch64.tar.gz ]
+  then
+
+    mkdir -p ${buildDir} || exit 1
+
+    if [ -z "${buildDir}" ] || ! [ -d "${buildDir}" ]
+    then
+      echo "Failed to get build dir."
+      exit 1
+    fi
+
+    if [ -n "${aarch64_pkg_cache}" ]
+    then
+      mkdir -p ${buildDir}/var/cache/pacman/pkg/aarch64
+      ${SUDO} mkdir -p /var/cache/pacman/pkg/aarch64
+      ${SUDO} mkdir -p "${aarch64_pkg_cache}"
+      mkdir -p "${buildDir}/var/cache/pacman/pkg"
+      ${SUDO} mount --bind "${aarch64_pkg_cache}" "${buildDir}/var/cache/pacman/pkg"
+    fi
+
+    wget --no-clobber https://raw.githubusercontent.com/archlinuxarm/archlinuxarm-keyring/master/archlinuxarm.gpg
+    ${SUDO} pacman-key --populate archlinuxarm
+    ${SUDO} pacman-key --lsign-key archlinuxarm
+
+    ${SUDO} pacstrap -M -K -C ${_scriptRoot}/pacman.aarch64.conf ${buildDir} archlinuxarm-keyring base git sudo || exit 1
+
+    pushd ${buildDir} && ${SUDO} tar -czf ${_scriptRoot}/arch-rootfs-aarch64.tar.gz .
+    popd
+
+    if [ -n "${aarch64_pkg_cache}" ]
+    then
+      ${SUDO} umount "${buildDir}/var/cache/pacman/pkg" || exit 1
+    fi
+
+  else
+    echo "aarch64_build: Using existing archive: ${_scriptRoot}/arch-rootfs-aarch64.tar.gz"
+  fi
+
+
+  cat ${_scriptRoot}/arch-rootfs-aarch64.tar.gz | docker import - archlinux-aarch64:latest
+
+  # Clean out the buildDir
+  ${SUDO} rm -rfv ${buildDir:-/tmp/emergencyfallback}
+}
+
+function aarch64 {
+  baseImageName="archlinux-aarch64:latest"
+  extraArgs=(-v /var/cache/pacman/pkg/aarch64:/var/cache/pacman/pkg) # Always use the package cache on the host
+
+  # Check if we have already made this image and react accordingly
+
+  if [ -z "$(docker images -q archlinux-aarch64:latest)" ]; then
+    echo "Missing ${baseImageName}. Building..."
+    aarch64_build
+  else
+    echo "${baseImageName} already exists. Skipping build."
+  fi
+
+  # Ensure we have qemu-aarch64-static and that it's ready for use.
+  # Prepare the host to chroot in
+  ${SUDO} pacman --needed --noconfirm -S qemu-user-static-binfmt qemu-user-static
+  ${SUDO} cp -nv /usr/lib/binfmt.d/qemu-aarch64-static.conf /etc/binfmt.d/
+
+  # Quickly test the container
+  docker run -ti --rm --name ${baseImageName}_testrun ${baseImageName} /bin/bash -c "echo hello world"
+
+  # Update the image
+  update_container
+}
+
+#  ____
+# |  _ \ _   _ _ __
+# | |_) | | | | '_ \
+# |  _ <| |_| | | | |
+# |_| \_\\__,_|_| |_|
+#
+
+# Run the correct function for the desired architecture
+${ARCHITECTURE}
