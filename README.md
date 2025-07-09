@@ -82,3 +82,26 @@ Create a Jenkins job (anywhere) to call this script and make sure you define a s
 By default it signs packages without a signature. With `--verify` it verifies and re-signs packages in the event of a forced build but ignores packages over 100MB in size. With both `--verify` and `--force` it will verify all packages including larger sized ones.
 
 Ideally you should never have to run `--verify` and/or `--force` however some packages such as python-based packages may need to be re-built as newer versions of python roll out for Archlinux. I am working on automatic python package detection so a epoch value can be set based on the python version - to avoid overwriting older pkg files in-place.
+
+#### Building and using an aarch64 container
+
+`CARCH=aarch64 ./docker_update_archlinux` needs to be in your system's `docker` group and requires the following sudoers configuration to prepare the host system to pacstrap archlinuxarm:
+
+```
+jenkins ALL=(ALL) NOPASSWD: /usr/bin/pacman-key --add archlinuxarm.gpg
+jenkins ALL=(ALL) NOPASSWD: /usr/bin/pacman-key --lsign-key 9D22B7BB678DC056B1F7723CB55C5315DCD9EE1A
+jenkins ALL=(ALL) NOPASSWD: /usr/bin/pacman-key --lsign-key 02922214DE8981D14DC2ACABBC704E86B823CD25
+jenkins ALL=(ALL) NOPASSWD: /usr/bin/pacman-key --lsign-key 69DD6C8FD314223E14362848BF7EEF7A9C6B5765
+jenkins ALL=(ALL) NOPASSWD: /usr/bin/pacman-key --lsign-key 68B3537F39A313B3E574D06777193F152BDBE6A6
+
+jenkins ALL=(ALL) NOPASSWD: /sbin/mkdir -p /var/cache/pacman/pkg/aarch64
+jenkins ALL=(ALL) NOPASSWD: /sbin/mount --bind /var/cache/pacman/pkg/aarch64 /tmp/aarch64_build/var/cache/pacman/pkg
+jenkins ALL=(ALL) NOPASSWD: /sbin/pacman-key --populate archlinuxarm
+jenkins ALL=(ALL) NOPASSWD: /sbin/pacman-key --lsign-key archlinuxarm
+jenkins ALL=(ALL) NOPASSWD: /sbin/pacstrap -M -K -C * /tmp/aarch64_build archlinuxarm-keyring base git sudo
+jenkins ALL=(ALL) NOPASSWD: /sbin/tar -czf *arch-rootfs-aarch64.tar.gz .
+jenkins ALL=(ALL) NOPASSWD: /sbin/umount /tmp/aarch64_build/var/cache/pacman/pkg
+jenkins ALL=(ALL) NOPASSWD: /sbin/pacman --needed --noconfirm -S qemu-user-static-binfmt qemu-user-static
+jenkins ALL=(ALL) NOPASSWD: /sbin/cp -nv /usr/lib/binfmt.d/qemu-aarch64-static.conf /etc/binfmt.d/
+jenkins ALL=(ALL) NOPASSWD: /sbin/rm -rfv /tmp/aarch64_build
+```
