@@ -267,13 +267,11 @@ function makePackage {
 
 # Provision a docker container for building the desired package
 function createContainer {
+
   echo "[${scriptName}] Creating container..."
 
   # Filter unfriendly characters from the container name
   CONTAINERNAME="$(tr -cd '[a-zA-Z0-9][a-zA-Z0-9_.-]' <<< "${BASENAME}")"
-
-  # This script assumes you have recently run ./docker_update_archlinux before invoking.
-  #docker pull archlinux:latest
 
   # Ensure there isn't a remaining container from a previously interrupted run
   docker container rm -f "${CONTAINERNAME}" >/dev/null 2>&1
@@ -296,7 +294,7 @@ function createContainer {
     -e    CARCH=${REPOARCH} \
     -e  PKGDEST=${PKGDEST} \
     --ulimit nofile=1024:524288 \
-    archlinux:latest \
+    ${baseImageName} \
     bash
 
   # Update and configure the environment for building.
@@ -347,6 +345,21 @@ declare -AG packagePreferences
 
 # Install any dependencies
 $SUDO pacman -S --needed --asdeps jq
+
+if [ -z "${CARCH}" ]
+then
+  ARCHITECTURE=$(uname -m)
+else
+  ARCHITECTURE=${CARCH}
+fi
+
+baseImageName=archlinux:latest
+
+if [[ "${CARCH}" == aarch64 ]]
+then
+  baseImageName=archlinux-aarch64:latest
+fi
+
 
 arguments=($@) # For docker if invoked.
 while [ $# -gt 0 ]
