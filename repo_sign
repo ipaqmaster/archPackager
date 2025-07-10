@@ -51,7 +51,7 @@ function signThing {
     --output "${file}.sig" \
     --sign "${file}"
 
-  if [[  "${file}" =~ ^.*.zst$ ]]
+  if [[  "${file}" =~ ^.*.(zst|xz)$ ]]
   then
     repo-add -s ${REPODIR}/${REPONAME}.db.tar.gz "$file"
   fi
@@ -84,7 +84,7 @@ done
 [ -z "${REPOBASE}" ] && export REPOBASE=/repo
 
 # Enumerate and sign all repos and their respective packages
-find ${REPOBASE}/ -name '*.zst' -printf %h\\n | sort -u | while read REPODIR
+find ${REPOBASE} \( -name '*.zst' -or -name '*.xz' \) -printf %h\\n | sort -u | while read REPODIR
 do
   echo ""
   REPO_DIR_KEYS=(${REPODIR//// })
@@ -97,11 +97,11 @@ do
   if [ $(find ${REPODIR}/*.tar.gz | wc -l) -eq 0 ]
   then
     echo "Repo doesn't seem to exist. Creating..."
-    repo-add ${REPODIR}/${REPONAME}.db.tar.gz ${REPODIR}/*.zst
+    repo-add ${REPODIR}/${REPONAME}.db.tar.gz ${REPODIR}/*.{xz,zst}
   fi
 
   # Sign anything without a .sig file.
-  for file in ${REPODIR}/*.{db,gz,zst}
+  for file in ${REPODIR}/*.{db,gz,xz,zst}
   do
     if ! [ -f "${file}.sig" ] 
     then
@@ -113,7 +113,7 @@ do
 
   if [ -n "${verify}" ]
   then
-    for file in ${REPODIR}/*.{db,gz,zst}
+    for file in ${REPODIR}/*.{db,gz,xz,zst}
     do
       size=$(stat -c%s "$file")
       if [ $size -le 104857600 ] || [[ -n "${force}" ]] # Do not verify items over 100MB by default.
