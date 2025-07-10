@@ -109,7 +109,7 @@ function aarch64_build {
       done
 
     mkdir -p ${buildDir}/usr/bin
-    ${SUDO} cp $(which qemu-aarch64-static) ${buildDir}/usr/bin
+    cp $(which qemu-aarch64-static) ${buildDir}/usr/bin
 
     ${SUDO} pacstrap -M -K -C ${_scriptRoot}/pacman.aarch64.conf ${buildDir} archlinuxarm-keyring base git sudo || exit 1
 
