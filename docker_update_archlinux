@@ -108,6 +108,9 @@ function aarch64_build {
         ${SUDO} pacman-key --lsign-key ${archlinuxarmKey}
       done
 
+    mkdir -p ${buildDir}/usr/bin
+    ${SUDO} cp $(which qemu-aarch64-static) ${buildDir}/usr/bin
+
     ${SUDO} pacstrap -M -K -C ${_scriptRoot}/pacman.aarch64.conf ${buildDir} archlinuxarm-keyring base git sudo || exit 1
 
     pushd ${buildDir} && ${SUDO} tar -czf ${_scriptRoot}/arch-rootfs-aarch64.tar.gz .
@@ -119,7 +122,7 @@ function aarch64_build {
     fi
 
     # Clean out the buildDir
-    ${SUDO} rm -rfv ${buildDir:-/tmp/emergencyfallback}
+    ${SUDO} rm -rf ${buildDir:-/tmp/emergencyfallback}
 
   else
     echo "aarch64_build: Using existing archive: ${_scriptRoot}/arch-rootfs-aarch64.tar.gz"
