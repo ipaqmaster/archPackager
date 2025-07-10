@@ -151,7 +151,7 @@ function aarch64 {
   fi
 
   # Quickly test the container
-docker run -ti --rm --name ${baseImageName/:*/}_testrun ${baseImageName} /bin/bash -c "echo hello world [aarch64]" || exit 1
+docker run --rm --name ${baseImageName/:*/}_testrun ${baseImageName} /bin/bash -c "echo hello world [aarch64]" || exit 1
 
   # Update the image
   update_container
