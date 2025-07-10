@@ -103,5 +103,11 @@ jenkins ALL=(ALL) NOPASSWD: /sbin/tar -czf *arch-rootfs-aarch64.tar.gz .
 jenkins ALL=(ALL) NOPASSWD: /sbin/umount /tmp/aarch64_build/var/cache/pacman/pkg
 jenkins ALL=(ALL) NOPASSWD: /sbin/pacman --needed --noconfirm -S qemu-user-static-binfmt qemu-user-static
 jenkins ALL=(ALL) NOPASSWD: /sbin/cp -nv /usr/lib/binfmt.d/qemu-aarch64-static.conf /etc/binfmt.d/
-jenkins ALL=(ALL) NOPASSWD: /sbin/rm -rfv /tmp/aarch64_build
+jenkins ALL=(ALL) NOPASSWD: /sbin/rm -rf /tmp/aarch64_build
 ```
+
+#### SUID
+
+The build user inside the containers needs sudo to grab build dependencies with pacman. By default `/proc/sys/fs/binfmt_misc/qemu-aarch64` will usually have the `F` flag set which is `nosetuid`. This disallows SUID usage and causes problems with the current design of the build_package script. I will probably fix this later down the line.
+
+In the meantime suid in qemu-aarch64-static can be enabled by editing /etc/binfmt.d/qemu-aarch64-static.conf and removing the `F` flag, then dropping the current definition with `echo -1 | sudo tee /proc/sys/fs/binfmt_misc/qemu-aarch64` and re-registering it with the `F` flag dropped: `cat /etc/binfmt.d/qemu-aarch64-static.conf | sudo tee /proc/sys/fs/binfmt_misc/register`
