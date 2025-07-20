@@ -195,9 +195,9 @@ function signKeys {
   then
     for key in ${keys[*]}
     do
-      echo "[${scriptName}] Fetching: ${key}"
+      echo "[${scriptName}] Fetching pgp key: ${key}"
     gpg --recv-key ${key}
-      echo "[${scriptName}] Signing: ${key}"
+    echo "[${scriptName}] Signing pgp key: ${key}"
     gpg --lsign ${key}
     done
   fi
@@ -207,9 +207,9 @@ function signKeys {
   then
     for key in ${keysPacman[*]}
     do
-      echo "[${scriptName}] Fetching: ${key}"
+      echo "[${scriptName}] Fetching pgp key (pacman): ${key}"
     ${SUDO} pacman-key -r ${key}
-      echo "[${scriptName}] Signing: ${key}"
+      echo "[${scriptName}] Signing pgp key (pacman): ${key}"
     ${SUDO} pacman-key --lsign-key ${key}
     done
   fi
@@ -241,24 +241,24 @@ function makePackage {
    echo "[${scriptName}] Building..."
 
    # Check if already in repo and build deps
-   if readSrcinfo
+  if readSrcinfo
   then
-    checkTargetPackageExists
-    getAllDeps
 
-    # Fetch and sign any pgp keys this PKGBUILD intends to verify content with.
     if [ -n "${validpgpkeys[*]}" ]
     then
       keys+=(${validpgpkeys[*]})
-      signKeys
     fi
+
+    # Fetch and sign any pgp keys this PKGBUILD intends to verify content with, plus any extras.
+    signKeys
+
+    checkTargetPackageExists
+    getAllDeps
 
   else
     echo "[${scriptName}] Unable to read PKGBUILD"
     exit 1
   fi
-
-  signKeys
 
    # Build our target
   CARCH=${REPOARCH} makepkg ${makepkgArgs[*]}
