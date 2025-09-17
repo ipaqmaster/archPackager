@@ -53,7 +53,7 @@ function signThing {
 
   if [[  "${file}" =~ ^.*.(zst|xz)$ ]]
   then
-    repo-add -s ${REPODIR}/${REPONAME}.db.tar.gz "$file"
+    repo-add -s ${REPODIR}/${REPONAME}.db.tar.gz "$file" || exit 1
   fi
 }
 
