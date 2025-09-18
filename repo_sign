@@ -44,19 +44,82 @@ function verifyThing {
   fi
 }
 
+# Signs a file and adds it to the repo data
 function signThing {
-  echo "Signing: ${file}."
   gpg -b --yes --pinentry-mode loopback \
     --passphrase "${gpg_passphrase}" \
     --output "${file}.sig" \
     --sign "${file}"
 
-  if [[  "${file}" =~ ^.*.(zst|xz)$ ]]
+  gpgReturnCode=$?
+  if [ $? -eq 0 ]
   then
-    repo-add -s ${REPODIR}/${REPONAME}.db.tar.gz "$file" || exit 1
+    echo "Signed: ${file}."
+    return ${gpgReturnCode}
+  else
+    echo "Failed to sign: ${file}."
+    exit 1
+  fi
+
+}
+
+# Make the repo aware of a package file
+function repoAddThing {
+  if [[  "${file}" =~ ^.*.pkg.*.(zst|xz)$ ]]
+  then
+    repoLockfileWait
+    if repo-add --sign ${REPODIR}/${REPONAME}.db.tar.gz "${file}"
+    then
+      return $?
+    else
+      if [ -f "${file}.sig" ]
+      then
+        echo "repo-add failed for ${file}"
+        echo "Removing signature so this package so it can be reprocessed on the next run."
+        rm -v "${file}.sig"
+        exit 1
+      fi
+    fi
   fi
 }
 
+
+# If a repo has a lockfile, check if the pid inside is valid.
+# If so, wait for that PID to exit, otherwise remove it and continue
+function repoLockfileWait {
+ repoLockFilePath="${REPODIR}/${REPONAME}.db.tar.gz.lck"
+ if ! [ -f "${repoLockFilePath}" ]
+ then
+   return
+ else
+   echo "There is a lock file in this repo's directory."
+   pid="$(<"${repoLockFilePath}")"
+
+   # If the file contains a pid, check if its alive and wait if it is.
+   if [ -z "${pid}" ]
+   then
+     echo "The file contains no pid. Removing the lock and continuing."
+     rm -v "${repoLockFilePath}"
+     return
+   else
+     if ! [[ $pid =~ ^[0-9]+$ ]]
+     then
+       echo "The pid inside is not a number: ${pid}"
+       echo "Removing the lock file and continuing."
+       rm -v "${repoLockFilePath}"
+       return
+     fi
+     if [ -d "/proc/${pid}" ]
+     then
+       echo "Pid ${pid} is running. Waiting for it to exit."
+       while [ -d /proc/${pid} ]
+       do
+         sleep 1
+       done
+     fi
+   fi
+ fi
+}
 
 #  ____             _
 # | __ )  ___  __ _(_)_ __
@@ -71,6 +134,10 @@ do
     -f|-force|--f|--force)
       echo "Forcing verification of larger packages..."
       force=1
+      ;;
+    --force-repo-add)
+      echo "Forcing repo-add on all packages after signing rounds..."
+      repoAddForce=1
       ;;
     -verify|--verify)
       echo "Verifying smaller packages..."
@@ -94,26 +161,30 @@ do
   echo -e "REPODIR=${REPOBASE}"
   echo -e "REPONAME=${REPONAME}"
 
-  if [ $(find ${REPODIR}/*.tar.gz | wc -l) -eq 0 ]
+  if [ $(find "${REPODIR}" -type f -regextype egrep -iregex ".*/${REPONAME}.(db|files).tar.gz" | wc -l) -eq 0 ]
   then
     echo "Repo doesn't seem to exist. Creating..."
-    repo-add ${REPODIR}/${REPONAME}.db.tar.gz ${REPODIR}/*.{xz,zst}
+    repoLockfileWait
+    repo-add ${REPODIR}/${REPONAME}.db.tar.gz ${files[*]}
   fi
 
+  # Find things in the repodir
+
   # Sign anything without a .sig file.
-  for file in ${REPODIR}/*.{db,gz,xz,zst}
+  files=$(find ${REPODIR} -type f -regextype egrep -iregex '.*.pkg.*(db|gz|xz|zst)')
+
+  for file in ${files[*]}
   do
-    if ! [ -f "${file}.sig" ] 
+    if ! [ -f "${file}.sig" ]
     then
-      signThing
+      signThing && repoAddThing
     fi
+
   done
-
-
 
   if [ -n "${verify}" ]
   then
-    for file in ${REPODIR}/*.{db,gz,xz,zst}
+    for file in ${files[*]}
     do
       size=$(stat -c%s "$file")
       if [ $size -le 104857600 ] || [[ -n "${force}" ]] # Do not verify items over 100MB by default.
@@ -123,8 +194,17 @@ do
           signThing
         fi
       else
-        echo "Skipping due to 100MB limit: ${file}"
+        echo "Skipping sig verification of file due to 100MB limit: ${file}"
       fi
     done
+  fi
+
+  # Repo-add all things if force is enabled
+  if [ -n "${repoAddForce}" ]
+  then
+    echo "--force-repo-add specified."
+    echo "Calling repo-add on all packages in the directory (${#files[*]})"
+    repoLockfileWait
+    repo-add --new --sign ${REPODIR}/${REPONAME}.db.tar.gz ${files[*]} || exit 1
   fi
 done
