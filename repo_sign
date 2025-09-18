@@ -1,5 +1,7 @@
 #!/bin/bash
 
+_scriptRoot="$(dirname $(realpath $0))"
+
 # This script expects this variable to be defined.
 if [ -z "${gpg_passphrase}" ]
 then
@@ -15,6 +17,12 @@ fi
 
 
 function verifyThing {
+  if [ ! -f "${file}" ]
+  then
+    echo "No such file: ${file}"
+    return 1
+  fi
+
   if [ ! -f "${file}.sig" ]
   then
     echo "No signature: ${file}"
@@ -34,13 +42,67 @@ function verifyThing {
   # return 1
   #fi
 
-  if gpg --quiet --verify ${file}.sig > /dev/null 2>&1
+  function verify {
+    if gpg --quiet --verify ${file}.sig > /dev/null 2>&1
+    then
+      echo "Valid signature: ${file}"
+      return 0
+    else
+      echo "Invalid signature: ${file}"
+      return 1
+    fi
+  }
+
+  # Check if a file or its signature's stat have changed since last run. If missing, store and verify.
+  function smartVerify {
+
+    fileBasename="$(basename "${file}")"
+    fileBasenameSig="${fileBasename}.sig"
+    fileStatFile="${_scriptRoot}/.repo_sign_verification_tracking/${fileBasename}.stat"
+    fileStatFileSig="${_scriptRoot}/.repo_sign_verification_tracking/${fileBasenameSig}.stat"
+
+    # If there's no stat's or they don't match, verify.
+
+    if [ ! -f "${fileStatFile}" ] || [ ! -f "${fileStatFileSig}" ]
+    then
+      echo "This file does not have any stats stored."
+      needsSmartVerify=1
+
+    elif [[ $(stat "${file}" | grep -vE 'Access: [0-9]') != "$(<"${fileStatFile}")" ]]
+    then
+        echo "This file has changed since its last stat"
+        needsSmartVerify=1
+    elif [[ $(stat "${file}.sig" | grep -vE 'Access: [0-9]') != "$(<"${fileStatFileSig}")" ]]
+    then
+        echo "This file's sig has changed since its last stat"
+        needsSmartVerify=1
+    fi
+
+    if [ -n "${needsSmartVerify}" ]
+    then
+      verify
+      verifyCode=$?
+      if [ $verifyCode -eq 0 ]
+      then
+        stat "${file}"     | grep -vE 'Access: [0-9]' > "${fileStatFile}"
+        stat "${file}.sig" | grep -vE 'Access: [0-9]' > "${fileStatFileSig}"
+      else return $verifyCode
+      fi
+    else
+      echo "[smartVerify] No change: ${file}"
+    fi
+
+    fileStat="$(stat "${file}" | grep -vE 'Access: [0-9]')"
+    fileStatExistingFile="$(<"${repoLockFilePath}")"
+
+  }
+
+  if [ -z "${smartVerify}" ]
   then
-    echo "Valid signature: ${file}"
-    return 0
+    verify
   else
-    echo "Invalid signature: ${file}"
-    return 1
+    smartVerify
+    return $?
   fi
 }
 
@@ -52,7 +114,7 @@ function signThing {
     --sign "${file}"
 
   gpgReturnCode=$?
-  if [ $? -eq 0 ]
+  if [ ${gpgReturnCode} -eq 0 ]
   then
     echo "Signed: ${file}."
     return ${gpgReturnCode}
@@ -74,7 +136,7 @@ function repoAddThing {
     else
       if [ -f "${file}.sig" ]
       then
-        echo "repo-add failed for ${file}"
+        echo "repo-add failed for: ${file}"
         echo "Removing signature so this package so it can be reprocessed on the next run."
         rm -v "${file}.sig"
         exit 1
@@ -142,6 +204,12 @@ do
     -verify|--verify)
       echo "Verifying smaller packages..."
       verify=1
+      ;;
+    -smart-verify|--smart-verify)
+      echo "Enabling smart verification..."
+      mkdir -p "${_scriptRoot}/.repo_sign_verification_tracking"
+      verify=1
+      smartVerify=1
       ;;
     -everything|--everything)
       echo "Forcing all verification and repo package re-adding..."
