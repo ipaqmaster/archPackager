@@ -171,9 +171,10 @@ do
   # Find things in the repodir
 
   # Sign anything without a .sig file.
-  files=$(find ${REPODIR} -type f -regextype egrep -iregex '.*.pkg.*(db|gz|xz|zst)')
+  files=$(    find ${REPODIR} -type f -regextype egrep -iregex '.*.pkg.*(db|gz|xz|zst)')
+  repoFiles=$(find ${REPODIR} -type f -regextype egrep -iregex ".*/${REPONAME}.(db|files).tar.gz")
 
-  for file in ${files[*]}
+  for file in ${files[*]} ${repoFiles[*]}
   do
     if ! [ -f "${file}.sig" ]
     then
@@ -194,12 +195,12 @@ do
           signThing
         fi
       else
-        echo "Skipping sig verification of file due to 100MB limit: ${file}"
+        echo "Skipping sig verification of file due to 101MB limit: ${file}"
       fi
     done
   fi
 
-  # Repo-add all things if force is enabled
+  # Repo-add all package files if --repo-add-force were specified.
   if [ -n "${repoAddForce}" ]
   then
     echo "--force-repo-add specified."
