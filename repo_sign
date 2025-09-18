@@ -143,6 +143,13 @@ do
       echo "Verifying smaller packages..."
       verify=1
       ;;
+    -everything|--everything)
+      echo "Forcing all verification and repo package re-adding..."
+      everything=1
+      force=1
+      repoAddForce=1
+      verify=1
+      ;;
   esac
   shift
 done
