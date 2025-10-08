@@ -1,0 +1,79 @@
+#!/bin/bash
+# A script to check if a repo is building AUR packages which may have been promoted to the official repositories.
+# Making the building of said package redundant.
+
+# Print help if no args given
+
+function printHelp {
+  echo -e "Usage:"
+  echo -e "\t$0 --targetRepo someRepo"
+  exit 1
+}
+
+if [[ -z "$@" ]] ; then echo "No args seen. Printing help" ; printHelp ; fi
+
+# Arg loop
+while [ $# -gt 0 ]
+do
+  case "$(tr '[:upper:]' '[:lower:]'<<<$1)" in
+    --targetrepo)
+      targetRepo="$2"
+      shift
+    ;;
+    --skip-sync|--no-sync)
+    skipSync=1
+    ;;
+    *)
+      echo "Unknown argument $1"
+      printHelp
+    ;;
+    esac
+  shift
+done
+
+[[ $UID != 0  ]] && SUDO=`command -v sudo`
+
+if [ -z "${targetRepo}" ]
+then
+  echo "Need --targetRepo XxYy"
+  exit 1
+fi
+
+
+# Check targetRepo is present
+pacman -Sl ${targetRepo} >/dev/null || exit $?
+
+if [ -z "${skipSync}" ]
+then
+  ${SUDO} pacman -Sy
+else
+  echo "Skipping pacman sync..."
+fi
+
+# Get all packages, sort by second key (package name) for later `comm` call.
+allRepoPackages="$(pacman -Ss | cut -d' ' -f1 | sort --field-separator=/ --key=2)"
+
+targetRepoPackages="$(grep "^${targetRepo}" <<< "${allRepoPackages}")"
+otherRepoPackages="$(grep -v "^${targetRepo}" <<< "${allRepoPackages}")"
+
+targetRepoPackagesNoRepo="$(cut -d/ -f2 <<< "${targetRepoPackages}")"
+otherRepoPackagesNoRepo="$( cut -d/ -f2 <<< "${otherRepoPackages}")"
+
+# Look for duplicates across targetRepo and other repos.
+existingPackages=($(comm -12 <(echo "${targetRepoPackagesNoRepo}") <(echo "${otherRepoPackagesNoRepo}")))
+
+# Report on any found duplicates.
+if [ ${#existingPackages[*]} -gt 0 ]
+then
+  echo "Found some packages from target repo :${targetRepo}: in other repos:"
+  echo "${existingPackages[*]}"
+
+  echo "Sources:"
+  for existingPackage in ${existingPackages[*]}
+  do
+    grep "${existingPackage}$" <<< "${otherRepoPackages}" | sed -e 's/^/\t/g'
+  done
+
+  exit 1
+fi
+
