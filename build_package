@@ -317,13 +317,21 @@ function createContainer {
     docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
   fi
 
+  # Update the container
   docker exec -w "${PWD}" "${CONTAINERNAME}" pacman -Syu --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
+
+  # Add the user inside the container and set their home permissions
   docker exec -w "${PWD}" "${CONTAINERNAME}" useradd -d ${HOME} -m -u ${UID} ${USER}
   docker exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
-  docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c 'echo MAKEFLAGS=\"--jobs=\$\(nproc\)\" | tee -a /etc/makepkg.conf >/dev/null 2>&1'
+  docker exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
+
+  # Copy the host's makepkg.conf for the build.
+  docker cp /etc/makepkg.conf "${CONTAINERNAME}":/etc/makepkg.conf
+
+  # Let the user invoke sudo inside the container
   docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "tee /etc/sudoers.d/user_${USER} <<< '${USER} ALL=(ALL) NOPASSWD: ALL'"
 
-  # Build
+  # Start the build by running this script and its arguments again but inside the container.
   docker exec -w "${PWD}" -u ${USER} ${CONTAINERNAME} bash -l ${0} ${arguments[*]}
   buildCode=$?
 
