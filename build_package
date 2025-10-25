@@ -303,6 +303,12 @@ function createContainer {
   # Ignore initramfs packages to avoid generating needless images in the container.
   #docker exec -w "${PWD}" ${CONTAINERNAME} sed -i '/#IgnorePkg/a IgnorePkg = booster dracut mkinitcpio initramfs' /etc/pacman.conf
 
+  # Use the host's mirrorlist (In case there's a local mirror or proxy we should be using)
+  if [ -d /etc/pacman.d/mirrorlist ]
+  then
+    docker cp /etc/pacman.d/mirrorlist "${CONTAINERNAME}":/etc/pacman.d/mirrorlist
+  fi
+
   docker exec -w "${PWD}" "${CONTAINERNAME}" pacman -Sydd linux --noconfirm --needed --ignore booster,dracut,mkinitcpio,initramfs # Alone to ignore deps
 
   if [ -n "${multilib}" ]
