@@ -326,8 +326,9 @@ function createContainer {
   # Update the container
   docker exec -w "${PWD}" "${CONTAINERNAME}" pacman -Syu --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
 
-  # Add the user inside the container and set their home permissions
-  docker exec -w "${PWD}" "${CONTAINERNAME}" useradd -d ${HOME} -m -u ${UID} ${USER}
+  # Replicate this user's group ID and user ID in the container, conveniently named the same.
+  docker exec -w "${PWD}" "${CONTAINERNAME}" groupadd --gid $(id -g) $(id -gn ${USER})
+  docker exec -w "${PWD}" "${CONTAINERNAME}" useradd -d ${HOME} -m -u ${UID} ${USER} -g $(id -gn ${USER})
   docker exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
   docker exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
 
