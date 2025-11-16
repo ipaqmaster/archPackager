@@ -26,13 +26,9 @@ else
 fi
 
 
-if ! systemctl is-active docker >/dev/null 2>&1
+if ! command -v podman >/dec/null
 then
-  echo "Docker isn't running!"
-  exit 1
-elif ! docker ps >/dev/null 2>&1
-then
-  echo "Can't access docker!"
+  echo "Can't find podman in PATH, is it installed?"
   exit 1
 fi
 
@@ -53,22 +49,28 @@ function update_container {
   echo "Updating ${baseImageName}..."
 
   # Remove any previous update container
-  docker container rm "${_scriptName}" >/dev/null 2>&1
+  podman container rm "${_scriptName}" >/dev/null 2>&1
 
   # Attempt to run updates
-  docker run ${extraArgs[@]} --name "${_scriptName}" "${baseImageName}" pacman -Syu --noconfirm || exit 1
+  podman run ${extraArgs[@]} --name "${_scriptName}" "${baseImageName}" pacman -Syu --noconfirm
+  returnCode=$? 
 
-  # Commit the update container as the new latest image
-  docker commit       "${_scriptName}" "${baseImageName}"
-  docker container rm "${_scriptName}" >/dev/null 2>&1
+  if [ ${returnCode} -eq 0 ]
+  then
+    # Commit the update container as the new latest image
+    podman commit       "${_scriptName}" "${baseImageName}"
+  fi
+
+  # Always clean up
+  podman container rm "${_scriptName}" >/dev/null 2>&1
 }
 
 function x86_64 {
   baseImageName="archlinux:latest"
 
-  # Pull the latest archlinux:docker image to be updated.
+  # Pull the latest archlinux:podman image to be updated.
   # This will overwrite any local latest image
-  docker pull "${baseImageName}"
+  podman pull "${baseImageName}"
 
   # Update the image
   update_container
@@ -128,7 +130,7 @@ function aarch64_build {
     echo "aarch64_build: Using existing archive: ${_scriptRoot}/arch-rootfs-aarch64.tar.gz"
   fi
 
-  cat ${_scriptRoot}/arch-rootfs-aarch64.tar.gz | docker import - archlinux-aarch64:latest
+  cat ${_scriptRoot}/arch-rootfs-aarch64.tar.gz | podman import - archlinux-aarch64:latest
 
 }
 
@@ -143,7 +145,7 @@ function aarch64 {
   ${SUDO} cp -nv /usr/lib/binfmt.d/qemu-aarch64-static.conf /etc/binfmt.d/
 
   # Check if we have already made this image and react accordingly
-  if [ -z "$(docker images -q archlinux-aarch64:latest)" ]; then
+  if [ -z "$(podman images -q archlinux-aarch64:latest)" ]; then
     echo "Missing ${baseImageName}. Building..."
     aarch64_build
   else
@@ -151,7 +153,7 @@ function aarch64 {
   fi
 
   # Quickly test the container
-docker run --rm --name ${baseImageName/:*/}_testrun ${baseImageName} /bin/bash -c "echo hello world [aarch64]" || exit 1
+podman run --rm --name ${baseImageName/:*/}_testrun ${baseImageName} /bin/bash -c "echo hello world [aarch64]" || exit 1
 
   # Update the image
   update_container

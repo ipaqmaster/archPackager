@@ -13,7 +13,7 @@ JOB_NAME_KEYS=(${JOB_NAME//// })
 # Docker check
 
 function isDocker {
-  [ -f /.dockerenv ]
+  [ -n "${container}" ]
   return $?
 }
 
@@ -265,7 +265,7 @@ function makePackage {
 
 }
 
-# Provision a docker container for building the desired package
+# Provision a podman container for building the desired package
 function createContainer {
 
   echo "[${scriptName}] Creating container..."
@@ -274,14 +274,13 @@ function createContainer {
   CONTAINERNAME="$(tr -cd '[a-zA-Z0-9][a-zA-Z0-9_.-]' <<< "${BASENAME}")"
 
   # Ensure there isn't a remaining container from a previously interrupted run
-  docker container rm -f "${CONTAINERNAME}" >/dev/null 2>&1
+  podman container rm -f "${CONTAINERNAME}" >/dev/null 2>&1
 
   # Start a container with some critical pieces passed through. Plus the host's pacman cache.
   # ulimit is specified to prevent `fakeroot` from hanging.
-  docker run \
+  podman run \
     -ti \
     -d \
-    -v /var/cache/pacman:/var/cache/pacman \
     -v ${PKGDEST}:${PKGDEST} \
     -v ${0}:${0} \
     -v ${PWD}:${PWD} \
@@ -293,57 +292,67 @@ function createContainer {
     -e REPOARCH=${REPOARCH} \
     -e    CARCH=${REPOARCH} \
     -e  PKGDEST=${PKGDEST} \
+    --userns=keep-id:uid=$(id -u),gid=$(id -g) \
+    --user root \
     --ulimit nofile=1024:524288 \
     ${baseImageName} \
     bash
 
+    ## Not included for now
+    # ownership issues in rootless
+    # -v /var/cache/pacman:/var/cache/pacman \
+    # No need
+    # --network=host \
+    # # Using true uid/gid instead
+    # --userns=keep-id:uid=1000,gid=1000 \
+
   # Update and configure the environment for building.
-  docker exec -w "${PWD}" ${CONTAINERNAME} pacman-key --init
+  podman exec -w "${PWD}" ${CONTAINERNAME} pacman-key --init
 
   # Ignore initramfs packages to avoid generating needless images in the container.
-  #docker exec -w "${PWD}" ${CONTAINERNAME} sed -i '/#IgnorePkg/a IgnorePkg = booster dracut mkinitcpio initramfs' /etc/pacman.conf
+  #podman exec -w "${PWD}" ${CONTAINERNAME} sed -i '/#IgnorePkg/a IgnorePkg = booster dracut mkinitcpio initramfs' /etc/pacman.conf
 
   # Use the host's mirrorlist (In case there's a local mirror or proxy we should be using)
   if [ -d /etc/pacman.d/mirrorlist ]
   then
-    docker cp /etc/pacman.d/mirrorlist "${CONTAINERNAME}":/etc/pacman.d/mirrorlist
+    podman cp /etc/pacman.d/mirrorlist "${CONTAINERNAME}":/etc/pacman.d/mirrorlist
   fi
 
-  docker exec -w "${PWD}" "${CONTAINERNAME}" pacman -Sydd linux --noconfirm --needed --ignore booster,dracut,mkinitcpio,initramfs # Alone to ignore deps
+  podman exec -w "${PWD}" "${CONTAINERNAME}" pacman -Sydd linux --noconfirm --needed --ignore booster,dracut,mkinitcpio,initramfs # Alone to ignore deps
 
   if [ -n "${multilib}" ]
   then
-    docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo '[multilib]'                         | tee -a /etc/pacman.conf"
-    docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
+    podman exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo '[multilib]'                         | tee -a /etc/pacman.conf"
+    podman exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
   fi
 
   if [ -n "${extra}" ]
   then
-    docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo '[extra]'                            | tee -a /etc/pacman.conf"
-    docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
+    podman exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo '[extra]'                            | tee -a /etc/pacman.conf"
+    podman exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
   fi
 
   # Update the container
-  docker exec -w "${PWD}" "${CONTAINERNAME}" pacman -Syu --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
+  podman exec -w "${PWD}" "${CONTAINERNAME}" pacman -Syu --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
 
   # Replicate this user's group ID and user ID in the container, conveniently named the same.
-  docker exec -w "${PWD}" "${CONTAINERNAME}" groupadd --gid $(id -g) $(id -gn ${USER})
-  docker exec -w "${PWD}" "${CONTAINERNAME}" useradd -d ${HOME} -m -u ${UID} ${USER} -g $(id -gn ${USER})
-  docker exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
-  docker exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
+  podman exec -w "${PWD}" "${CONTAINERNAME}" groupadd --gid $(id -g) $(id -gn ${USER})
+  podman exec -w "${PWD}" "${CONTAINERNAME}" useradd -d ${HOME} -m -u ${UID} ${USER} -g $(id -gn ${USER})
+  podman exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
+  podman exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
 
   # Copy the host's makepkg.conf for the build.
-  docker cp /etc/makepkg.conf "${CONTAINERNAME}":/etc/makepkg.conf
+  podman cp /etc/makepkg.conf "${CONTAINERNAME}":/etc/makepkg.conf
 
   # Let the user invoke sudo inside the container
-  docker exec -w "${PWD}" "${CONTAINERNAME}" bash -c "tee /etc/sudoers.d/user_${USER} <<< '${USER} ALL=(ALL) NOPASSWD: ALL'"
+  podman exec -w "${PWD}" "${CONTAINERNAME}" bash -c "tee /etc/sudoers.d/user_${USER} <<< '${USER} ALL=(ALL) NOPASSWD: ALL'"
 
   # Start the build by running this script and its arguments again but inside the container.
-  docker exec -w "${PWD}" -u ${USER} ${CONTAINERNAME} bash -l ${0} ${arguments[*]}
+  podman exec -w "${PWD}" -u ${USER} ${CONTAINERNAME} bash -l ${0} ${arguments[*]}
   buildCode=$?
 
   # Always clean up
-  docker container rm -f "${CONTAINERNAME}" >/dev/null 2>&1
+  podman container rm -f "${CONTAINERNAME}" >/dev/null 2>&1
   exit ${buildCode}
 }
 
@@ -376,7 +385,7 @@ then
 fi
 
 
-arguments=($@) # For docker if invoked.
+arguments=($@) # For podman if invoked.
 while [ $# -gt 0 ]
 do
   case "$(tr '[:upper:]' '[:lower:]'<<<$1)" in
@@ -532,7 +541,7 @@ then
   fi
 fi
 
-# Check environment is ready for docker activities
+# Check environment is ready for podman activities
 # and either build the package or make a container to do so.
 if isDocker
 then
@@ -545,15 +554,9 @@ then
   fi
 
 else
-  if ! systemctl is-active docker >/dev/null 2>&1
+  if ! command -v podman >/dev/null
   then
-    echo "[${scriptName}] Docker isn't running!"
-    exit 1
-  elif ! docker ps >/dev/null 2>&1
-  then
-    echo "[${scriptName}] Missing permission to use docker!"
-    echo "[${scriptName}] Try: $SUDO usermod -aG docker ${USER}"
-echo
+    echo "Can't find podman in PATH, is it installed?"
     exit 1
   fi
 

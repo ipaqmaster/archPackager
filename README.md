@@ -2,7 +2,7 @@
 
 ### About 
 
-This is a collection of scripts I use to build AUR (And occasionally, official) packages for Archlinux including any AUR dependencies along the way. The main script takes advantage of docker for cleanbuilding and existing AUR dependency builds to save on resources. By default it uses all available cores for makepkg (`$(nproc)`)
+This is a collection of scripts I use to build AUR (And occasionally, official) packages for Archlinux including any AUR dependencies along the way. The main script takes advantage of podman for cleanbuilding and existing AUR dependency builds to save on resources. By default it uses all available cores for makepkg (`$(nproc)`)
 
 The main script is designed to be used with Jenkins which exposes some variables regarding a job's name and path for making some assumptions. It attempts to figure out the package name, its intended build architecture and repository name from the `JOB_NAME` variable when called by Jenkins (or set manually). It also assumes that the repository name comes right before the architecture.
 
@@ -13,7 +13,7 @@ The script can automatically detect when a package has already been built from t
 
 ### Intended usage
 
-This script intends to be called by its full path while in the working directory of an AUR (or official) package with a `./PKGBUILD` file present. The script uses the `archlinux:latest` docker image to get started, which can be updated by running `./docker_update_archlinux` at any time, which is intended to update the latest image to current packaged releases to avoid additional work per container. 
+This script intends to be called by its full path while in the working directory of an AUR (or official) package with a `./PKGBUILD` file present. The script uses the `archlinux:latest` podman image to get started, which can be updated by running `./docker_update_archlinux` at any time, which is intended to update the latest image to current packaged releases to avoid additional work per container. 
 
 It automatically notifies and exits when it believes an AUR package has been promoted to the official repositories, skipping this check if building official packages.
 
@@ -56,10 +56,9 @@ After cloning this repository to the home directory of the jenkins build server 
 
 This would do for most packages but given this repository needs to trust three externally signed pgp public keys we must describe them to the script so the build process can trust them when verifying key files of the build: `$HOME/archPackager/build_package --key 647F28654894E3BD457199BE38DBBDC86092693E --key 83BC8889351B5DEBBB68416EB8AC08600F108CDF --key ABAF11C65A2970B130ABE3C479BE3E4300411886`
 
-Making sure the directories `/repo/myOfficialPackageRepo/x86_64` exists the job should now be capable of building a package. Make sure the jenkins user has been added to the `docker` group and that the service is running.
+Making sure the directories `/repo/myOfficialPackageRepo/x86_64` exists the job should now be capable of building a package. 
 
-
-#### Nightly archlinux:latest docker image preparation
+#### Nightly archlinux:latest podman image preparation
 
 This script can be invoked either manually at will or through a new Jenkins job. If you build a lot of packages I highly recommend using this method to reduce network consumption and preserve local resources working from this base image rather than reinstalling packages for each build container.
 
@@ -85,7 +84,7 @@ Ideally you should never have to run `--verify` and/or `--force` however some pa
 
 #### Building and using an aarch64 container
 
-`CARCH=aarch64 ./docker_update_archlinux` needs to be in your system's `docker` group and requires the following sudoers configuration to prepare the host system to pacstrap archlinuxarm:
+`CARCH=aarch64 ./docker_update_archlinux` requires the following sudoers configuration to prepare the host system to pacstrap archlinuxarm:
 
 ```
 jenkins ALL=(ALL) NOPASSWD: /usr/bin/pacman-key --add archlinuxarm.gpg
