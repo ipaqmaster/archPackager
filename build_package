@@ -1,7 +1,14 @@
 #!/bin/bash
 [ ${UID} -ne 0 ] && SUDO=sudo # Sudo if not root
 supportedArchs=(x86_64 armv7h aarch64 i686 pentium4 any)
-JOB_NAME_KEYS=(${JOB_NAME//// })
+
+if [ -n "${packageDir}" ]
+then
+  JOB_NAME_KEYS=(${packageDir//// })
+elif [ -n "${JOB_NAME}" ]
+then
+  JOB_NAME_KEYS=(${JOB_NAME//// })
+fi
 
 #  _____                 _
 # |  ___|   _ _ __   ___| |_ ___
