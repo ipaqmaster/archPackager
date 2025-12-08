@@ -448,6 +448,11 @@ do
       shift
     ;;
 
+    --start|--time|--start-time|--start-time-unix)
+      startTimeUnix=${2}
+      shift
+    ;;
+
     *)
       echo "[${scriptName}] Passing to makepkg: $1"
       makepkgArgs+=(${1})
@@ -458,6 +463,15 @@ do
 done
 
 # Attempt to guess unfilled variables and set some defaults.
+
+# Track the start time to avoid duplicate -force rebuilds for repeated dependencies
+if [ -z "${startTimeUnix}" ]
+then
+  startTimeUnix="$(date +%s)"
+  echo "[${scriptName}] startTimeUnix unset now: ${startTimeUnix}"
+else
+  echo "[${scriptName}] startTimeUnix inherited: ${startTimeUnix}"
+fi
 
 # When unset, assume repositories live under /repo
 [ -z "${REPOBASE}" ] && export REPOBASE=/repo
@@ -522,13 +536,43 @@ echo "[${scriptName}]  PKGDEST=${PKGDEST}"
 [ -z "${REPONAME}" ] && { echo "[${scriptName}] Cannot proceed, missing critical var: REPONAME" ; exit 1 ;}
 [ -z "${REPOARCH}" ] && { echo "[${scriptName}] Cannot proceed, missing critical var: REPOARCH" ; exit 1 ;}
 
+
+#  ____             _
+# | __ )  ___  __ _(_)_ __
+# |  _ \ / _ \/ _` | | '_ \
+# | |_) |  __/ (_| | | | | |
+# |____/ \___|\__, |_|_| |_|
+#             |___/
+
 # Check if we have already got the package
 # Skip this check for -git packages, or when -force/-f is specified.
 if checkPackageAlreadyBuilt
 then
-  if [ -n "${force}" ]
+
+  # Always unset this first
+  unset buildThePackage
+
+  packageAge="$(stat -c%W "${packageFilepath}")"
+  #echo "Package age is   ${packageAge}"
+  #echo "startTimeUnix is ${startTimeUnix}"
+  #echo "Age minus start is $((( ${packageAge} - ${startTimeUnix})))"
+  if [ ${packageAge} -lt ${startTimeUnix} ] && [ -n "${force}" ]
   then
-    echo "[${scriptName}] Forcing rebuild..."
+    buildThePackage=1 # Build/Rebuild
+
+  else
+    unset buildThePackage
+    [ -n "${force}" ] && echo "[${scriptName}] Package was just built. Reusing it."
+
+  fi
+
+  # Determine what to do (Most of these just echo something and continue)
+  if [ -n "${force}" ] && [ -n "${buildThePackage}" ]
+  then
+      if [ -f "${packageFilepath}" ]
+      then
+        echo "[${scriptName}] Forcing rebuild..."
+      fi
 
   elif [ -n "${dep}" ]
   then
