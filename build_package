@@ -160,7 +160,7 @@ function getAllDeps {
 
       # Invoke this script on the dependency and install it.
       pushd deps/${dep} >/dev/null 2>&1
-      ${0} --install --noconfirm ${makepkgArgs[*]} -si --noconfirm --dep --needed
+      ${0} --start ${startTimeUnix} --install --noconfirm ${makepkgArgs[*]} -si --noconfirm --dep --needed
       popd >/dev/null 2>&1
 
     else
