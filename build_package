@@ -366,7 +366,7 @@ function createContainer {
   podman exec -w "${PWD}" "${CONTAINERNAME}" bash -c "tee /etc/sudoers.d/user_${USER} <<< '${USER} ALL=(ALL) NOPASSWD: ALL'"
 
   # Start the build by running this script and its arguments again but inside the container.
-  podman exec -w "${PWD}" -u ${USER} ${CONTAINERNAME} bash -l ${0} ${arguments[*]}
+  podman exec -w "${PWD}" -u ${USER} ${CONTAINERNAME} bash -l ${0} --start ${startTimeUnix} ${arguments[*]}
   buildCode=$?
 
   # Always clean up
