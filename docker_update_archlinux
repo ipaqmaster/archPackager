@@ -26,7 +26,7 @@ else
 fi
 
 
-if ! command -v podman >/dec/null
+if ! command -v podman >/dev/null
 then
   echo "Can't find podman in PATH, is it installed?"
   exit 1
