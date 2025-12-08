@@ -276,6 +276,24 @@ function createContainer {
   # Ensure there isn't a remaining container from a previously interrupted run
   podman container rm -f -t0 "${CONTAINERNAME}" >/dev/null 2>&1
 
+
+  # Make a pacman cache just for these containers
+  mkdir -p "${HOME}/podman_var_cache_pacman"
+
+  # Also remove anything in it older than 30 days
+  days=30
+  if [[ ${days:-30} =~ [0-9]+ ]]
+  then
+
+    # Give a tally
+    echo -n "Removing packages from cache: "
+    time find "${HOME}/podman_var_cache_pacman" -type f -name '*.zst' -ctime +${days:-30} | \
+      tee -a pacman-cache_${days:-30}d_or_older.$(date +%s).txt | wc -l
+
+    # Remove old packages
+    time find "${HOME}/podman_var_cache_pacman" -type f -ctime +${days:-30} -name '*.zst' -delete
+  fi
+
   # Start a container with some critical pieces passed through. Plus the host's pacman cache.
   # ulimit is specified to prevent `fakeroot` from hanging.
   podman run \
@@ -292,6 +310,7 @@ function createContainer {
     -e REPOARCH=${REPOARCH} \
     -e    CARCH=${REPOARCH} \
     -e  PKGDEST=${PKGDEST} \
+    -v ${HOME}/podman_var_cache_pacman:/var/cache/pacman \
     --userns=keep-id:uid=$(id -u),gid=$(id -g) \
     --user root \
     --ulimit nofile=1024:524288 \
@@ -300,7 +319,6 @@ function createContainer {
 
     ## Not included for now
     # ownership issues in rootless
-    # -v /var/cache/pacman:/var/cache/pacman \
     # No need
     # --network=host \
     # # Using true uid/gid instead
