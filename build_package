@@ -274,7 +274,7 @@ function createContainer {
   CONTAINERNAME="$(tr -cd '[a-zA-Z0-9][a-zA-Z0-9_.-]' <<< "${BASENAME}")"
 
   # Ensure there isn't a remaining container from a previously interrupted run
-  podman container rm -f "${CONTAINERNAME}" >/dev/null 2>&1
+  podman container rm -f -t0 "${CONTAINERNAME}" >/dev/null 2>&1
 
   # Start a container with some critical pieces passed through. Plus the host's pacman cache.
   # ulimit is specified to prevent `fakeroot` from hanging.
@@ -352,7 +352,7 @@ function createContainer {
   buildCode=$?
 
   # Always clean up
-  podman container rm -f "${CONTAINERNAME}" >/dev/null 2>&1
+  podman container rm -f -t0 "${CONTAINERNAME}" >/dev/null 2>&1
   exit ${buildCode}
 }
 
