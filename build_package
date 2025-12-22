@@ -357,14 +357,15 @@ function createContainer {
     podman exec -w "${PWD}" "${CONTAINERNAME}" bash -c "echo 'Include = /etc/pacman.d/mirrorlist' | tee -a /etc/pacman.conf"
   fi
 
-  # Update the container
-  podman exec -w "${PWD}" "${CONTAINERNAME}" pacman -Syu --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
-
   # Replicate this user's group ID and user ID in the container, conveniently named the same.
   podman exec -w "${PWD}" "${CONTAINERNAME}" groupadd --gid $(id -g) $(id -gn ${USER})
   podman exec -w "${PWD}" "${CONTAINERNAME}" useradd -d ${HOME} -m -u ${UID} ${USER} -g $(id -gn ${USER})
   podman exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
   podman exec -w "${PWD}" "${CONTAINERNAME}" chown -R ${USER} ${HOME}
+
+  # Update the container and install some key tools.
+  # Do this after replicating the current user to avoid another program stealing the intended ID (Such as the git package)
+  podman exec -w "${PWD}" "${CONTAINERNAME}" pacman -Syu --noconfirm --needed base-devel binutils debugedit fakeroot gcc git jq sudo linux linux-headers
 
   # Copy the host's makepkg.conf for the build.
   podman cp /etc/makepkg.conf "${CONTAINERNAME}":/etc/makepkg.conf
