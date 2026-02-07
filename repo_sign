@@ -251,7 +251,7 @@ do
 
   for file in ${files[*]} ${repoFiles[*]}
   do
-    if ! [ -f "${file}.sig" ]
+    if ! [ -s "${file}.sig" ]
     then
       signThing && repoAddThing
     fi
