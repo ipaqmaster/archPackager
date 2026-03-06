@@ -12,7 +12,6 @@ aarch64_pkg_cache=/var/cache/pacman/pkg/aarch64
 # |_|   |_|  \___| .__/
 #                |_|
 
-[ $UID -ne 0 ] && SUDO=sudo # Sudo if not root
 _scriptPath=$(realpath $0)
 _scriptRoot="$(dirname $(realpath $0))"
 _scriptName="$(basename ${_scriptRoot})"
@@ -93,38 +92,38 @@ function aarch64_build {
     if [ -n "${aarch64_pkg_cache}" ]
     then
       mkdir -p ${buildDir}/var/cache/pacman/pkg/aarch64
-      ${SUDO} mkdir -p /var/cache/pacman/pkg/aarch64
-      ${SUDO} mkdir -p "${aarch64_pkg_cache}"
+      mkdir -p /var/cache/pacman/pkg/aarch64
+      mkdir -p "${aarch64_pkg_cache}"
       mkdir -p "${buildDir}/var/cache/pacman/pkg"
-      ${SUDO} mount --bind "${aarch64_pkg_cache}" "${buildDir}/var/cache/pacman/pkg"
+      mount --bind "${aarch64_pkg_cache}" "${buildDir}/var/cache/pacman/pkg"
     fi
 
     wget --no-clobber https://raw.githubusercontent.com/archlinuxarm/archlinuxarm-keyring/master/archlinuxarm.gpg
-    ${SUDO} pacman-key --add archlinuxarm.gpg
+    pacman-key --add archlinuxarm.gpg
 
     set -x
     # Sign the archlinuxarm keys
     pacman-key -l archlinuxarm | grep -Po '[A-F0-9]{40}' | \
       while read archlinuxarmKey
       do
-        ${SUDO} pacman-key --lsign-key ${archlinuxarmKey}
+        pacman-key --lsign-key ${archlinuxarmKey}
       done
 
     mkdir -p ${buildDir}/usr/bin
     cp $(which qemu-aarch64-static) ${buildDir}/usr/bin
 
-    ${SUDO} pacstrap -M -K -C ${_scriptRoot}/pacman.aarch64.conf ${buildDir} archlinuxarm-keyring base git sudo || exit 1
+    pacstrap -M -K -C ${_scriptRoot}/pacman.aarch64.conf ${buildDir} archlinuxarm-keyring base git sudo || exit 1
 
-    pushd ${buildDir} && ${SUDO} tar -czf ${_scriptRoot}/arch-rootfs-aarch64.tar.gz .
+    pushd ${buildDir} && tar -czf ${_scriptRoot}/arch-rootfs-aarch64.tar.gz .
     popd
 
     if [ -n "${aarch64_pkg_cache}" ]
     then
-      ${SUDO} umount "${buildDir}/var/cache/pacman/pkg" || exit 1
+      umount "${buildDir}/var/cache/pacman/pkg" || exit 1
     fi
 
     # Clean out the buildDir
-    ${SUDO} rm -rf ${buildDir:-/tmp/emergencyfallback}
+    rm -rf ${buildDir:-/tmp/emergencyfallback}
 
   else
     echo "aarch64_build: Using existing archive: ${_scriptRoot}/arch-rootfs-aarch64.tar.gz"
@@ -141,8 +140,8 @@ function aarch64 {
 
   # Ensure we have qemu-aarch64-static and that it's ready for use.
   # Prepare the host to chroot in
-  ${SUDO} pacman --needed --noconfirm -S qemu-user-static-binfmt qemu-user-static
-  ${SUDO} cp -nv /usr/lib/binfmt.d/qemu-aarch64-static.conf /etc/binfmt.d/
+  pacman --needed --noconfirm -S qemu-user-static-binfmt qemu-user-static
+  cp -nv /usr/lib/binfmt.d/qemu-aarch64-static.conf /etc/binfmt.d/
 
   # Check if we have already made this image and react accordingly
   if [ -z "$(podman images -q archlinux-aarch64:latest)" ]; then
