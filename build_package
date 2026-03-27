@@ -276,7 +276,9 @@ function makePackage {
   fi
 
    # Build our target
-  CARCH=${REPOARCH} makepkg ${makepkgArgs[*]}
+  export CARCH=${REPOARCH}
+  yes | makepkg ${makepkgArgs[*]/--noconfirm/} # Makepkg but force assume yes for package conflicts.
+  #makepkg ${makepkgArgs[*]}
 
 }
 
