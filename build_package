@@ -126,12 +126,20 @@ function getAllDeps {
 
   # If a dependency is not available in given repos assume we have to build it ourselves.
   deps=(${depends[@]} ${makedepends[@]} ${checkdepends[@]} ${depends_i686[@]} ${depends_x86_64[@]})
+  echo "deps are: ${deps[*]}"
+  installedPackages=($(pacman -Q | cut -d' ' -f1))
   for dep in ${deps[*]}
   do
     dep="$(sed -E -e 's/(<|>)=.*//g' -e 's/=.*//g' -e 's/(<|>).*//g' <<< "${dep}")" # Strip version requirements from a package name.
 
     # Skip any circular dependencies
-    if [[ "${pkgname[@]}" =~ "${dep}" ]]
+
+    if [[ " ${installedPackages[@]} " =~ " ${dep} " ]]
+    then
+      # This shouldn't need to be here. Bandages an issue.
+      #echo "$[${scriptName}] ${dep} is already installed in this environment."
+      continue # Silently continue
+    elif [[ "${pkgname[@]}" =~ "${dep}" ]]
     then
       echo "[${scriptName}] Skipping circular dep ${dep}..."
       continue
