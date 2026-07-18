@@ -10,6 +10,8 @@ then
   JOB_NAME_KEYS=(${JOB_NAME//// })
 fi
 
+declare -a depsToFetch
+
 #  _____                 _
 # |  ___|   _ _ __   ___| |_ ___
 # | |_ | | | | '_ \ / __| __/ __|
