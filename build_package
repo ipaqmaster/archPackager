@@ -150,6 +150,14 @@ function getAllDeps {
     fi
 
     echo "[${scriptName}] Processing dep ${dep}..."
+
+    # Check if we can resolve this package from a manually specified dependency
+    if [ -n "${packagePreferences[${dep}]}" ]
+    then
+      echo "[${scriptName}] Using user preference: ${dep}=${packagePreferences[${dep}]}."
+      dep="${packagePreferences[${dep}]}"
+    fi
+
     if ! checkPackageInRepos "${dep}"
     then
       echo "[${scriptName}] Acquiring AUR dependency ${dep}..."
@@ -158,16 +166,10 @@ function getAllDeps {
       then
         mkdir -p deps
 
-
-        # Check if we can resolve this package from a manually specified dependency
-        if [ -n "${packagePreferences[${dep}]}" ]
-        then
-          echo "[${scriptName}] Using user preference: ${dep}=${packagePreferences[${dep}]}."
-          dep="${packagePreferences[${dep}]}"
-        fi
-
-          # Ask AUR what git path the dep is under (Sometimes does not match package name 1:1)
+        # Ask AUR what git path the dep is under (Sometimes does not match package name 1:1)
         depRepoName=$(getAurPackageInfo "${dep}")
+
+        # Still nothing? Stop.
         if [ -z "${depRepoName}" ]
         then
           echo "[${scriptName}] Can't find package for ${dep}, may be a generic reference with multiple package providers."
