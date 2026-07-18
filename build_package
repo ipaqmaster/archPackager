@@ -79,7 +79,7 @@ function checkPackageAlreadyBuilt {
 # than the name of which we're about to build into.
 # (To catch AUR packages promoted to official repositories)
 function checkPackageInRepos {
-  pkgSearch="$( pacman -Ss "^${1}$" | grep '^[a-zA-Z]'  | grep -v "${REPONAME}")"
+  pkgSearch="$( pacman -Ss "^${1}$" | grep '^[a-zA-Z]'  | grep -v "${REPONAME}" | head -n1)"
 
   [ -n "${pkgSearch}" ]
   return $?
