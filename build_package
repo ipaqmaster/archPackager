@@ -468,7 +468,6 @@ do
        package="$(cut -d= -f1  <<< ${2})"
       provider="$(cut -d= -f2- <<< ${2})"
       packagePreferences[${package}]="${provider}"
-      echo ${packagePreferences[zfs]}
       shift
     ;;
 
