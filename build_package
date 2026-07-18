@@ -27,7 +27,7 @@ function isDocker {
 # Check if our package already exists in the intended destination directory.
 function checkPackageAlreadyBuilt {
 
-  # If this is a python package, set PKGREL based on the currently installed python version
+  # If this is a python package, set PKGREL based on the currently installed python version and append the real pkgrel on the end
   . PKGBUILD
   if [[ ${depends[@]} =~ python ]]
   then
@@ -44,12 +44,14 @@ function checkPackageAlreadyBuilt {
         exit 1
       fi
 
-      echo -e "\npkgrel=${pythonPkgRel} # pythonPkgRel" >> PKGBUILD
+      # Update in-place
+      sed -i -E "s/^pkgrel=[0-9]+/pkgrel=${pythonPkgRel}${pkgrel}/g" PKGBUILD
 
     fi
 
   fi
 
+  # Reload
   if [ -f /etc/makepkg.conf ] && [ -f PKGBUILD ]
   then
     . /etc/makepkg.conf
