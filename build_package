@@ -138,12 +138,12 @@ function getAllDeps {
 
     # Skip any circular dependencies
 
-    if [[ " ${installedPackages[@]} " =~ " ${dep} " ]]
+    if [[ " ${installedPackages[@]} " =~ [[:space:]]${dep}[[:space:]] ]]
     then
       # This shouldn't need to be here. Bandages an issue.
       #echo "$[${scriptName}] ${dep} is already installed in this environment."
       continue # Silently continue
-    elif [[ "${pkgname[@]}" =~ "${dep}" ]]
+    elif [[ " ${pkgname[@]} " =~ [[:space:]]${dep}[[:space:]] ]]
     then
       echo "[${scriptName}] Skipping circular dep ${dep}..."
       continue
